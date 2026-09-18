@@ -1,0 +1,123 @@
+# Quality-Aware Safety Surveillance (QASD) Configuration
+
+project:
+  name: "QASD - Quality-Aware Safety Detection"
+  version: "1.0.0"
+  description: "Automated Detection of Unanticipated Incidents in Poor CCTV Environments"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  ws_endpoint: "/ws/detections"
+  fps_limit: 25
+
+cameras:
+  - id: "CAM_01"
+    name: "Main Entrance Corridor"
+    source: 0 # webcam or rtsp URL / video file
+    expected_quality: "GOOD"
+    restricted_zones: []
+  - id: "CAM_02"
+    name: "Dark Stairwell & Basement"
+    source: "data/raw/stairwell.mp4"
+    expected_quality: "DEGRADED"
+    restricted_zones: []
+  - id: "CAM_03"
+    name: "Perimeter Security Fence"
+    source: "data/raw/perimeter.mp4"
+    expected_quality: "MODERATE"
+    restricted_zones:
+      - name: "Restricted Vault Perimeter"
+        polygon: [[120, 100], [540, 100], [580, 420], [80, 420]]
+  - id: "CAM_04"
+    name: "Industrial Warehouse Floor"
+    source: "data/raw/warehouse.mp4"
+    expected_quality: "MODERATE"
+    restricted_zones:
+      - name: "Forklift Active Hazard Zone"
+        polygon: [[200, 150], [500, 150], [520, 380], [180, 380]]
+
+quality_assessment:
+  brightness:
+    low_threshold: 45.0
+    severely_low_threshold: 25.0
+    high_threshold: 220.0
+  blur:
+    laplacian_var_threshold: 120.0
+    severe_laplacian_threshold: 50.0
+  noise:
+    snr_threshold_db: 18.0
+  contrast:
+    rms_threshold: 30.0
+
+adaptive_enhancement:
+  auto_mode: true
+  clahe:
+    clip_limit: 3.0
+    tile_grid_size: [8, 8]
+  gamma:
+    auto_gamma: true
+    default_gamma: 1.6
+  denoise:
+    bilateral_d: 9
+    sigma_color: 75
+    sigma_space: 75
+  deblur:
+    unsharp_sigma: 1.2
+    unsharp_strength: 1.5
+
+detection:
+  model_type: "yolov8n.pt" # yolov8n, yolov8s, yolo11n
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  target_classes:
+    - 0  # person
+    - 2  # car
+    - 3  # motorcycle
+    - 24 # backpack
+    - 26 # handbag
+    - 28 # suitcase
+
+tracking:
+  tracker_type: "bytetrack"
+  track_high_thresh: 0.5
+  track_low_thresh: 0.1
+  new_track_thresh: 0.6
+  track_buffer: 45
+  match_thresh: 0.8
+
+incidents:
+  fall:
+    vertical_velocity_threshold: -3.5 # pixels/frame normalized
+    aspect_ratio_collapse_threshold: 0.85 # width / height > 1.0 (horizontal)
+    ground_dwell_seconds: 2.0
+  violence:
+    proximity_pixel_dist: 70
+    kinetic_energy_threshold: 28.0
+    jitter_variance_threshold: 15.0
+  intrusion:
+    dwell_grace_seconds: 0.5
+  loitering:
+    max_stationary_seconds: 8.0
+    displacement_threshold_px: 25
+  abandoned_object:
+    unattended_seconds: 6.0
+    separation_dist_px: 120
+
+anomaly_detection:
+  model: "feature_autoencoder"
+  feature_dim: 128
+  reconstruction_error_threshold: 0.65
+  isolation_forest_contamination: 0.05
+
+risk_scoring:
+  weights:
+    incident_conf: 0.40
+    temporal_conf: 0.30
+    detection_conf: 0.20
+    quality_factor: 0.10
+  severity_tiers:
+    critical: 0.78
+    high: 0.60
+    medium: 0.40
+    low: 0.00
