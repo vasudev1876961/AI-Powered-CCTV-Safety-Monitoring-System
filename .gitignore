@@ -40,3 +40,7 @@ venv.bak/
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Model weights
+*.pt
+

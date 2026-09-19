@@ -1,8 +1,8 @@
 /**
- * QASD - Master Application Controller
- * Orchestrates Real-Time Video Loops, WebSocket Connections,
+ * QASD - Master Application Controller (v2.0.0 High-Throughput & Advanced Ops)
+ * Orchestrates Real-Time Video Loops, Bi-Directional WebSockets,
  * Quality Assessment, Adaptive Enhancement, Tracking Overlays,
- * Incident Feeds, and Tab Navigation.
+ * Quad Matrix Wall, Interactive Geofence Editor, Dual Sparklines, and Alerts.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,8 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
   const videoCanvas = document.getElementById('videoCanvas');
   const videoCtx = videoCanvas.getContext('2d');
+  const overlayCanvas = document.getElementById('overlayCanvas');
   const anomalyCanvas = document.getElementById('anomalyCanvas');
   const anomalyCtx = anomalyCanvas.getContext('2d');
+  const qualityCanvas = document.getElementById('qualityCanvas');
+  const qualityCtx = qualityCanvas ? qualityCanvas.getContext('2d') : null;
 
   const sandboxDegradedCanvas = document.getElementById('sandboxDegradedCanvas');
   const sandboxDegradedCtx = sandboxDegradedCanvas.getContext('2d');
@@ -38,6 +41,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastFrameTime = performance.now();
   let frameCount = 0;
   let currentFps = 25.0;
+  let activeTabId = 'tabConsole';
+
+  // Interactive Geofence Authoring State
+  let isDrawingGeofence = false;
+  let draftMousePos = null;
+
+  // Quality Index Telemetry History
+  const qualityHistory = [];
 
   // Sandbox degradation state
   const degradationSettings = {
@@ -49,26 +60,65 @@ document.addEventListener('DOMContentLoaded', () => {
     compression: 95
   };
 
-  // WebSocket Client connection
+  // ---------------------------------------------------------------------------
+  // 2. Bi-Directional WebSocket Bridge
+  // ---------------------------------------------------------------------------
   let ws = null;
   let isWsConnected = false;
+  let serverTelemetry = null;
 
   function initWebSocket() {
-    const wsUrl = `ws://${window.location.host || 'localhost:8000'}/ws/detections`;
+    const wsHost = window.location.host || 'localhost:8000';
+    const wsUrl = `ws://${wsHost}/ws/detections`;
     try {
       ws = new WebSocket(wsUrl);
       ws.onopen = () => {
         isWsConnected = true;
-        document.getElementById('topWsVal').textContent = 'SERVER LIVE';
-        document.getElementById('topWsVal').style.color = 'var(--accent-emerald)';
-        console.log('[WS] Connected to QASD server');
+        const topWsVal = document.getElementById('topWsVal');
+        topWsVal.textContent = 'SERVER LIVE (AI)';
+        topWsVal.style.color = 'var(--accent-emerald)';
+        console.log('[WS] Connected to QASD AI streaming server');
+
+        // Sync active camera with backend
+        sendWsMessage({ action: 'change_camera', camera_id: simulator.currentCam });
       };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = jsonParseSafe(event.data);
+          if (!data) return;
+
+          if (data.type === 'pipeline_telemetry') {
+            serverTelemetry = data;
+            // Reflect server FPS and quality
+            if (data.fps) {
+              document.getElementById('topFpsVal').textContent = `${data.fps.toFixed(1)} FPS`;
+            }
+            if (data.quality) {
+              updateQualityOSD(data.quality);
+            }
+            // Dispatch any alerts generated on server
+            if (data.alerts && data.alerts.length > 0) {
+              data.alerts.forEach(a => {
+                xaiManager.playAlertTone(a.severity);
+                xaiManager.showToast(a);
+                addAlertToSidebar(a);
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[WS] Error processing server telemetry', err);
+        }
+      };
+
       ws.onclose = () => {
         isWsConnected = false;
-        document.getElementById('topWsVal').textContent = 'CLIENT SIM';
-        document.getElementById('topWsVal').style.color = 'var(--accent-cyan)';
+        const topWsVal = document.getElementById('topWsVal');
+        topWsVal.textContent = 'CLIENT SIM';
+        topWsVal.style.color = 'var(--accent-cyan)';
         setTimeout(initWebSocket, 4000);
       };
+
       ws.onerror = () => {
         isWsConnected = false;
       };
@@ -76,9 +126,22 @@ document.addEventListener('DOMContentLoaded', () => {
       isWsConnected = false;
     }
   }
+
+  function sendWsMessage(payload) {
+    if (ws && isWsConnected && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    }
+  }
+
+  function jsonParseSafe(str) {
+    try { return JSON.parse(str); } catch (e) { return null; }
+  }
+
   initWebSocket();
 
-  // 2. Navigation Tab Switching
+  // ---------------------------------------------------------------------------
+  // 3. Navigation Tab Switching with Lazy Rendering Optimization
+  // ---------------------------------------------------------------------------
   const navTabs = document.querySelectorAll('.nav-tab-btn');
   const tabViews = document.querySelectorAll('.tab-view');
 
@@ -88,17 +151,19 @@ document.addEventListener('DOMContentLoaded', () => {
       tabViews.forEach(v => v.classList.remove('active'));
 
       btn.classList.add('active');
-      const targetId = btn.getAttribute('data-target');
-      const targetView = document.getElementById(targetId);
+      activeTabId = btn.getAttribute('data-target');
+      const targetView = document.getElementById(activeTabId);
       if (targetView) targetView.classList.add('active');
 
-      if (targetId === 'tabBenchmarks') {
+      if (activeTabId === 'tabBenchmarks') {
         benchmarkRunner.renderCharts();
       }
     });
   });
 
-  // 3. Camera Selector Buttons
+  // ---------------------------------------------------------------------------
+  // 4. Camera Selectors & Quad Matrix Mode
+  // ---------------------------------------------------------------------------
   const camButtons = document.querySelectorAll('.cam-btn[data-cam]');
   camButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -109,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
       simulator.setCamera(camId);
       incidentEngine.reset();
       updateCamInfoOSD(camId);
+      sendWsMessage({ action: 'change_camera', camera_id: camId });
     });
   });
 
@@ -119,7 +185,123 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 4. Custom Video File Upload
+  // Click on Quad Matrix quadrants to zoom into individual cameras
+  overlayCanvas.addEventListener('click', (e) => {
+    if (isDrawingGeofence) return; // Ignore if in drawing mode
+    if (simulator.currentCam !== 'QUAD') return;
+
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+    const clickX = (e.clientX - rect.left) * scaleX;
+    const clickY = (e.clientY - rect.top) * scaleY;
+
+    const hw = overlayCanvas.width / 2;
+    const hh = overlayCanvas.height / 2;
+
+    let targetCam = 'CAM_01';
+    if (clickX < hw && clickY < hh) targetCam = 'CAM_01';
+    else if (clickX >= hw && clickY < hh) targetCam = 'CAM_02';
+    else if (clickX < hw && clickY >= hh) targetCam = 'CAM_03';
+    else targetCam = 'CAM_04';
+
+    // Switch to target camera button
+    const targetBtn = document.querySelector(`.cam-btn[data-cam="${targetCam}"]`);
+    if (targetBtn) targetBtn.click();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 5. Interactive Geofence Polygon Drawing Tool
+  // ---------------------------------------------------------------------------
+  const btnDrawZone = document.getElementById('btnDrawZone');
+  const btnClearZones = document.getElementById('btnClearZones');
+
+  btnDrawZone.addEventListener('click', () => {
+    isDrawingGeofence = !isDrawingGeofence;
+    if (isDrawingGeofence) {
+      btnDrawZone.classList.add('active');
+      btnDrawZone.style.background = 'rgba(245, 158, 11, 0.25)';
+      btnDrawZone.style.borderColor = 'var(--accent-amber)';
+      overlayCanvas.classList.add('drawing-geofence');
+    } else {
+      exitDrawingMode();
+    }
+  });
+
+  function exitDrawingMode() {
+    isDrawingGeofence = false;
+    draftMousePos = null;
+    btnDrawZone.classList.remove('active');
+    btnDrawZone.style.background = '';
+    btnDrawZone.style.borderColor = '';
+    overlayCanvas.classList.remove('drawing-geofence');
+  }
+
+  overlayCanvas.addEventListener('mousemove', (e) => {
+    if (!isDrawingGeofence) return;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+    draftMousePos = {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  });
+
+  overlayCanvas.addEventListener('click', (e) => {
+    if (!isDrawingGeofence) return;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    simulator.addCustomZoneVertex(x, y);
+
+    // If vertex clicked close to first vertex, complete polygon
+    const draft = simulator.currentDraftZone;
+    if (draft.length >= 3) {
+      const d0 = draft[0];
+      const dist = Math.hypot(x - d0[0], y - d0[1]);
+      if (dist < 18) {
+        completeCustomZone();
+      }
+    }
+  });
+
+  overlayCanvas.addEventListener('dblclick', () => {
+    if (!isDrawingGeofence) return;
+    completeCustomZone();
+  });
+
+  function completeCustomZone() {
+    if (simulator.finishCustomZone()) {
+      btnClearZones.style.display = 'inline-flex';
+      sendWsMessage({
+        action: 'update_geofence',
+        zones: simulator.getZones()
+      });
+      xaiManager.showToast({
+        incidentType: 'Custom Geofence Active',
+        severity: 'LOW',
+        reasons: ['New restricted security perimeter armed and actively monitored.']
+      });
+    }
+    exitDrawingMode();
+  }
+
+  btnClearZones.addEventListener('click', () => {
+    simulator.clearCustomZones();
+    btnClearZones.style.display = 'none';
+    sendWsMessage({
+      action: 'update_geofence',
+      zones: simulator.getZones()
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 6. Custom Video File Upload & Webcam Stream
+  // ---------------------------------------------------------------------------
   const fileInput = document.getElementById('videoFileInput');
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -132,7 +314,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('osdCamTitle').textContent = `CUSTOM • ${file.name.toUpperCase()}`;
   });
 
-  // 5. Webcam Stream Toggle
   const btnWebcam = document.getElementById('btnWebcam');
   btnWebcam.addEventListener('click', async () => {
     if (isWebcam) {
@@ -163,13 +344,26 @@ document.addEventListener('DOMContentLoaded', () => {
     btnWebcam.classList.remove('active');
   }
 
-  // 6. Interactive Incident Simulation Triggers
-  document.getElementById('btnSimFall').addEventListener('click', () => simulator.triggerIncident('fall'));
-  document.getElementById('btnSimFight').addEventListener('click', () => simulator.triggerIncident('fight'));
-  document.getElementById('btnSimIntrusion').addEventListener('click', () => simulator.triggerIncident('intrusion'));
-  document.getElementById('btnSimBag').addEventListener('click', () => simulator.triggerIncident('bag'));
+  // ---------------------------------------------------------------------------
+  // 7. Interactive Incident Simulation Triggers
+  // ---------------------------------------------------------------------------
+  document.getElementById('btnSimFall').addEventListener('click', () => {
+    simulator.triggerIncident('fall');
+    sendWsMessage({ action: 'trigger_incident', type: 'fall' });
+  });
+  document.getElementById('btnSimFight').addEventListener('click', () => {
+    simulator.triggerIncident('fight');
+    sendWsMessage({ action: 'trigger_incident', type: 'fight' });
+  });
+  document.getElementById('btnSimIntrusion').addEventListener('click', () => {
+    simulator.triggerIncident('intrusion');
+    sendWsMessage({ action: 'trigger_incident', type: 'intrusion' });
+  });
+  document.getElementById('btnSimBag').addEventListener('click', () => {
+    simulator.triggerIncident('bag');
+    sendWsMessage({ action: 'trigger_incident', type: 'bag' });
+  });
 
-  // Controls under video
   const btnPlayPause = document.getElementById('btnPlayPause');
   btnPlayPause.addEventListener('click', () => {
     isPlaying = !isPlaying;
@@ -183,18 +377,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnClearAlerts').addEventListener('click', () => {
     const container = document.getElementById('alertsContainer');
-    container.innerHTML = '<div class="empty-alerts-placeholder">Monitoring surveillance stream for unexpected incidents...</div>';
+    container.innerHTML = '<div class="empty-alerts-placeholder" id="emptyAlertsPlaceholder">Monitoring surveillance stream for unexpected incidents...</div>';
   });
 
-  // Audio Toggle
-  const btnToggleSound = document.getElementById('btnToggleSound');
-  btnToggleSound.addEventListener('click', () => {
+  document.getElementById('btnToggleSound').addEventListener('click', () => {
     xaiManager.soundEnabled = !xaiManager.soundEnabled;
-    btnToggleSound.classList.toggle('active', xaiManager.soundEnabled);
-    btnToggleSound.style.color = xaiManager.soundEnabled ? 'var(--accent-emerald)' : 'var(--text-dim)';
+    const btn = document.getElementById('btnToggleSound');
+    btn.style.opacity = xaiManager.soundEnabled ? '1.0' : '0.4';
   });
 
-  // 7. Degradation Controls (Sandbox Tab)
+  // Sandbox Degradation Sliders
   const sliderDarkness = document.getElementById('sliderDarkness');
   const sliderNoise = document.getElementById('sliderNoise');
   const sliderBlur = document.getElementById('sliderBlur');
@@ -250,7 +442,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleGradCam = document.getElementById('toggleGradCam');
   const enhancementModeSelect = document.getElementById('enhancementModeSelect');
 
-  // 8. Main Real-Time Surveillance Loop (60 FPS / RAF)
+  enhancementModeSelect.addEventListener('change', (e) => {
+    sendWsMessage({ action: 'set_enhancement', mode: e.target.value });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. Main Real-Time Surveillance Loop (60 FPS / High-Throughput RAF)
+  // ---------------------------------------------------------------------------
   function surveillanceLoop() {
     requestAnimationFrame(surveillanceLoop);
 
@@ -263,7 +461,9 @@ document.addEventListener('DOMContentLoaded', () => {
       currentFps = (frameCount * 1000) / dt;
       frameCount = 0;
       lastFrameTime = now;
-      document.getElementById('topFpsVal').textContent = `${currentFps.toFixed(1)} FPS`;
+      if (!isWsConnected) {
+        document.getElementById('topFpsVal').textContent = `${currentFps.toFixed(1)} FPS`;
+      }
     }
 
     const w = videoCanvas.width;
@@ -273,7 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeDetections = [];
     if (simulator.isExternalVideo && hiddenVideo.readyState >= 2) {
       videoCtx.drawImage(hiddenVideo, 0, 0, w, h);
-      // Lightweight mock detections for uploaded video
       activeDetections = [
         { id: 1, class: 'person', conf: 0.89, bbox: [w * 0.4, h * 0.35, w * 0.52, h * 0.75] }
       ];
@@ -283,7 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Apply baseline camera degradations if in degraded camera (e.g. CAM_02 Dark Stairwell)
-    const currentCamCfg = simulator.cameraConfigs[simulator.currentCam];
     if (simulator.currentCam === 'CAM_02') {
       qualityEngine.applyDegradations(videoCtx, {
         darkness: 32,
@@ -297,27 +495,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // B. Quality Assessment
     const qMetrics = qualityEngine.assessQuality(videoCtx, w, h);
-    updateQualityOSD(qMetrics);
+    if (!isWsConnected) {
+      updateQualityOSD(qMetrics);
+    }
 
-    // C. Adaptive Enhancement Routing
+    // Record quality history for sparkline
+    if (frameCount % 3 === 0) {
+      qualityHistory.push(qMetrics.qualityFactor);
+      if (qualityHistory.length > 50) qualityHistory.shift();
+      renderQualitySparkline(qualityHistory, qMetrics.qualityFactor);
+    }
+
+    // C. Adaptive Enhancement Routing (O(1) LUT accelerated)
     const enhMode = enhancementModeSelect.value;
     const shouldEnhance = (enhMode === 'forced') || (enhMode === 'auto' && qMetrics.qualityState !== 'GOOD');
 
     updateEnhancementBadges(qMetrics, shouldEnhance);
 
-    if (shouldEnhance) {
+    if (shouldEnhance && enhMode !== 'bypass') {
       qualityEngine.applyAdaptiveEnhancement(videoCtx, qMetrics, enhMode === 'forced');
     }
 
-    // D. Render Sandbox Preview Canvas (if Sandbox tab active)
-    renderSandboxCanvases(videoCanvas, degradationSettings, qMetrics);
+    // D. Tab-Conditional Lazy Rendering Optimization:
+    // Only execute heavy sandbox degradation and enhancement passes when user is actually viewing the Sandbox tab!
+    if (activeTabId === 'tabSandbox') {
+      renderSandboxCanvases(videoCanvas, degradationSettings, qMetrics);
+    }
 
     // E. Incident & Anomaly Recognition
-    const zones = currentCamCfg ? currentCamCfg.zones : [];
-    const evaluation = incidentEngine.evaluateIncidents(activeDetections, zones, qMetrics.qualityFactor, now / 1000);
+    const allZones = simulator.getZones();
+    const evaluation = incidentEngine.evaluateIncidents(activeDetections, allZones, qMetrics.qualityFactor, now / 1000);
 
     // Update Risk & Anomaly Telemetry
-    updateRiskTelemetry(evaluation);
+    if (!isWsConnected) {
+      updateRiskTelemetry(evaluation);
+    }
 
     // F. Process Alerts
     if (evaluation.alerts.length > 0) {
@@ -331,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Audio Alarm
         xaiManager.playAlertTone(alert.severity);
 
-        // Toast & Notification
+        // Toast & Desktop Notification
         xaiManager.showToast(alert);
         xaiManager.showDesktopNotification(alert);
 
@@ -357,15 +569,20 @@ document.addEventListener('DOMContentLoaded', () => {
       renderer.drawDensityHeatmap(historyPts);
     }
 
-    // 2. Restricted Geofences
-    if (toggleZones.checked && zones.length > 0) {
-      for (const zone of zones) {
-        const isBreached = evaluation.alerts.some(a => a.incidentType.includes('Intrusion') || a.incidentType.includes('Loitering'));
+    // 2. Restricted Geofences (Default + Custom Interactive Zones)
+    if (toggleZones.checked && allZones.length > 0) {
+      for (const zone of allZones) {
+        const isBreached = evaluation.alerts.some(a => (a.incidentType.includes('Intrusion') || a.incidentType.includes('Loitering')) && a.zoneName === zone.name);
         renderer.drawRestrictedZone(zone.polygon, zone.name, isBreached);
       }
     }
 
-    // 3. Trajectory Trails
+    // 3. Draft Interactive Geofence under construction
+    if (isDrawingGeofence && simulator.currentDraftZone.length > 0) {
+      renderer.drawDraftPolygon(simulator.currentDraftZone, draftMousePos);
+    }
+
+    // 4. Trajectory Trails
     if (toggleTrails.checked) {
       incidentEngine.trackHistories.forEach(hist => {
         const isAlert = evaluation.alerts.some(a => a.trackId === hist.id);
@@ -373,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // 4. Bounding Boxes
+    // 5. Bounding Boxes
     if (toggleBBoxes.checked) {
       for (const det of activeDetections) {
         const isAlert = evaluation.alerts.some(a => a.trackId === det.id || String(a.trackId).includes(String(det.id)));
@@ -381,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 5. Grad-CAM Saliency Heatmap
+    // 6. Grad-CAM Saliency Heatmap
     if (toggleGradCam.checked) {
       const heatPoints = activeDetections.map(d => ({
         x: (d.bbox[0] + d.bbox[2]) / 2,
@@ -396,11 +613,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('osdCamClock').textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
   }
 
-  // Telemetry Updaters
+  // ---------------------------------------------------------------------------
+  // 9. Telemetry Updaters & Sparklines
+  // ---------------------------------------------------------------------------
   function updateQualityOSD(qMetrics) {
     const pill = document.getElementById('osdQualityPill');
     const topVal = document.getElementById('topQualityVal');
-    const state = qMetrics.qualityState;
+    const state = qMetrics.quality_state || qMetrics.qualityState || 'GOOD';
 
     pill.className = `quality-pill ${state.toLowerCase().replace(' ', '-')}`;
     pill.textContent = state;
@@ -408,10 +627,15 @@ document.addEventListener('DOMContentLoaded', () => {
     topVal.textContent = state;
     topVal.style.color = state === 'GOOD' ? 'var(--accent-emerald)' : (state === 'MODERATE' ? 'var(--accent-amber)' : 'var(--accent-crimson)');
 
-    document.getElementById('osdMetricLux').textContent = qMetrics.brightness.toFixed(1);
-    document.getElementById('osdMetricBlur').textContent = qMetrics.blurScore.toFixed(1);
-    document.getElementById('osdMetricNoise').textContent = `${(30 - qMetrics.noiseLevel).toFixed(1)} dB`;
-    document.getElementById('osdMetricContrast').textContent = qMetrics.contrast.toFixed(1);
+    const lux = qMetrics.brightness !== undefined ? qMetrics.brightness : 120;
+    const blur = qMetrics.blur_score !== undefined ? qMetrics.blur_score : (qMetrics.blurScore || 150);
+    const noise = qMetrics.noise_level !== undefined ? qMetrics.noise_level : (qMetrics.noiseLevel || 4);
+    const contrast = qMetrics.contrast !== undefined ? qMetrics.contrast : 45;
+
+    document.getElementById('osdMetricLux').textContent = Number(lux).toFixed(1);
+    document.getElementById('osdMetricBlur').textContent = Number(blur).toFixed(1);
+    document.getElementById('osdMetricNoise').textContent = `${(30 - Math.min(30, noise)).toFixed(1)} dB`;
+    document.getElementById('osdMetricContrast').textContent = Number(contrast).toFixed(1);
   }
 
   function updateEnhancementBadges(qMetrics, shouldEnhance) {
@@ -477,6 +701,31 @@ document.addEventListener('DOMContentLoaded', () => {
     anomalyCtx.stroke();
   }
 
+  function renderQualitySparkline(history, currentVal) {
+    if (!qualityCtx || !history || history.length === 0) return;
+    qualityCtx.clearRect(0, 0, qualityCanvas.width, qualityCanvas.height);
+
+    const qScoreEl = document.getElementById('qualityScoreVal');
+    if (qScoreEl) qScoreEl.textContent = (currentVal || 0.95).toFixed(2);
+
+    const w = qualityCanvas.width;
+    const h = qualityCanvas.height;
+
+    // Quality curve (green gradient)
+    qualityCtx.strokeStyle = '#10b981';
+    qualityCtx.lineWidth = 2;
+    qualityCtx.beginPath();
+
+    const dx = w / Math.max(1, history.length - 1);
+    history.forEach((val, i) => {
+      const x = i * dx;
+      const y = h - (val * h * 0.85 + 4);
+      if (i === 0) qualityCtx.moveTo(x, y);
+      else qualityCtx.lineTo(x, y);
+    });
+    qualityCtx.stroke();
+  }
+
   function addAlertToSidebar(alert) {
     const placeholder = document.getElementById('emptyAlertsPlaceholder');
     if (placeholder) placeholder.remove();
@@ -508,7 +757,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     container.insertBefore(card, container.firstChild);
 
-    // Limit cards in list
     if (container.children.length > 25) {
       container.removeChild(container.lastChild);
     }
@@ -523,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sandboxEnhancedCtx.drawImage(sandboxDegradedCanvas, 0, 0, sandboxEnhancedCanvas.width, sandboxEnhancedCanvas.height);
     qualityEngine.applyAdaptiveEnhancement(sandboxEnhancedCtx, baseQuality, true);
 
-    // Draw recovered bounding boxes on enhanced canvas to visually prove the pipeline novelty!
+    // Draw recovered bounding boxes on enhanced canvas to visually prove the pipeline novelty
     sandboxEnhancedCtx.strokeStyle = '#00f2fe';
     sandboxEnhancedCtx.lineWidth = 2;
     sandboxEnhancedCtx.strokeRect(260, 160, 70, 140);
@@ -536,5 +784,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Start surveillance RAF loop
   surveillanceLoop();
-  console.log('[QASD] Safety Surveillance Operations Console initialized successfully.');
+  console.log('[QASD] Safety Surveillance Operations Console v2.0.0 initialized successfully.');
 });

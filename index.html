@@ -100,9 +100,21 @@
               <span>CAM-04</span>
               <span class="badge-pill">Warehouse Floor</span>
             </button>
+            <button class="cam-btn btn-quad" data-cam="QUAD" id="btnQuadView" title="4-Camera Synchronized 2x2 Matrix Wall">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>
+              <span>QUAD MATRIX</span>
+              <span class="badge-pill">2x2 Wall</span>
+            </button>
           </div>
 
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="cam-btn" id="btnDrawZone" title="Click to draw custom restricted geofence polygon on canvas">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 15.7V13h2v4l-9 4-7-4V7l7-4 3.3 1.9-1 1.7L7 5 3 7.3v8.4L9 19l8-3.3zM15 1v6h6V1h-6zm4 4h-2V3h2v2z"/></svg>
+              <span>Draw Geofence</span>
+            </button>
+            <button class="cam-btn" id="btnClearZones" style="display: none; color: var(--accent-crimson);" title="Clear custom drawn zones">
+              <span>Clear Zones</span>
+            </button>
             <label class="cam-btn file-upload-label" title="Upload custom video to test">
               <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
@@ -253,7 +265,16 @@
                 <span>Unanticipated Anomaly Score</span>
                 <span id="anomalyScoreVal" style="color: var(--accent-cyan); font-weight: 700;">0.14</span>
               </div>
-              <canvas id="anomalyCanvas" width="340" height="48"></canvas>
+              <canvas id="anomalyCanvas" width="340" height="44"></canvas>
+            </div>
+
+            <!-- CCTV Quality Index Sparkline -->
+            <div class="anomaly-sparkline-box" style="margin-top: 10px;">
+              <div class="sparkline-header">
+                <span>Adaptive CCTV Quality Index</span>
+                <span id="qualityScoreVal" style="color: var(--accent-emerald); font-weight: 700;">0.92</span>
+              </div>
+              <canvas id="qualityCanvas" width="340" height="44"></canvas>
             </div>
           </div>
         </div>
@@ -478,11 +499,19 @@
           <div><span style="color: var(--text-dim);">CCTV QUALITY:</span> <strong id="modalQuality" style="color: #fb923c;">POOR</strong></div>
         </div>
 
-        <!-- Critical Key Frames Timeline -->
+        <!-- Critical Key Frames Timeline & Interactive Replay Scrubber -->
         <div>
-          <h4 style="font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 10px;">
-            Critical Key Frames Temporal Timeline (Pre-Incident &rarr; Event Trigger &rarr; Post-Incident)
-          </h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <h4 style="font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0;">
+              Critical Key Frames Timeline (Pre-Incident &rarr; Trigger &rarr; Post-Incident)
+            </h4>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="cam-btn" id="btnPlayKeyframeReplay" style="padding: 2px 10px; font-size: 0.7rem; color: var(--accent-cyan);">
+                Play Replay
+              </button>
+              <input type="range" id="scrubberKeyframe" min="0" max="2" value="2" style="width: 100px; accent-color: var(--accent-cyan); cursor: pointer;" title="Scrub through incident keyframes">
+            </div>
+          </div>
           <div class="key-frames-row" id="modalKeyFramesContainer">
             <!-- Injected via JavaScript -->
           </div>
@@ -512,6 +541,7 @@
 
         <!-- Modal Footer Actions -->
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <button class="cam-btn" id="btnPrintReport" title="Print formal incident audit report">Print Forensic Report</button>
           <button class="cam-btn" id="btnExportDossierJson">Export Evidence JSON</button>
           <button class="cam-btn active" id="btnAckIncident">Acknowledge & Archive</button>
         </div>

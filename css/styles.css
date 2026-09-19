@@ -1290,3 +1290,71 @@ body {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* Advanced Operator Styles */
+.key-frame-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.key-frame-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-cyan);
+}
+
+.key-frame-card.active {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 16px var(--accent-cyan-glow);
+}
+
+.key-frame-card.active .frame-tag {
+  background: var(--accent-cyan) !important;
+  color: #060911 !important;
+  font-weight: 700;
+}
+
+.cam-btn.btn-quad {
+  border-color: rgba(0, 242, 254, 0.45);
+  background: rgba(0, 242, 254, 0.08);
+}
+
+.cam-btn.btn-quad:hover, .cam-btn.btn-quad.active {
+  background: rgba(0, 242, 254, 0.22);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 12px var(--accent-cyan-glow);
+}
+
+#overlayCanvas.drawing-geofence {
+  cursor: crosshair;
+}
+
+/* Formal Security Audit Print Styles */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .header-bar, .camera-toolbar, .viewport-footer, .nav-tabs, .top-telemetry, .toast-container, .modal-close-btn, #btnPrintReport, #btnExportDossierJson, #btnAckIncident {
+    display: none !important;
+  }
+  .modal-overlay {
+    position: static !important;
+    background: none !important;
+    display: block !important;
+    padding: 0 !important;
+  }
+  .evidence-modal {
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .modal-body {
+    color: #000 !important;
+  }
+  .key-frame-img {
+    filter: none !important;
+  }
+}
+

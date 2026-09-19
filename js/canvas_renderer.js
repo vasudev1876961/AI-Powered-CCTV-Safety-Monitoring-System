@@ -1,7 +1,8 @@
 /**
  * QASD - Canvas Renderer Module
  * High-performance 60 FPS HTML5 Canvas rendering for bounding boxes,
- * trajectory paths, restricted geofences, density heatmaps, and Grad-CAM saliency.
+ * trajectory paths, restricted geofences, density heatmaps, Grad-CAM saliency,
+ * custom interactive geofence authoring, and Quad Matrix partitioning.
  */
 
 class CCTVCanvasRenderer {
@@ -119,7 +120,7 @@ class CCTVCanvasRenderer {
       ctx.stroke();
     }
 
-    // Draw active centroid pulse dot at head
+    // Centroid pulse dot at head
     const head = points[n - 1];
     ctx.fillStyle = isAlert ? '#ef4444' : '#00f2fe';
     ctx.beginPath();
@@ -150,9 +151,9 @@ class CCTVCanvasRenderer {
       ctx.lineWidth = 2.5;
       ctx.setLineDash([8, 4]);
     } else {
-      ctx.fillStyle = 'rgba(139, 92, 246, 0.12)';
-      ctx.strokeStyle = 'rgba(139, 92, 246, 0.8)';
-      ctx.lineWidth = 1.8;
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.14)';
+      ctx.strokeStyle = 'rgba(139, 92, 246, 0.85)';
+      ctx.lineWidth = 2;
       ctx.setLineDash([6, 6]);
     }
 
@@ -165,7 +166,50 @@ class CCTVCanvasRenderer {
     const tagY = polygon[0][1] + 20;
     ctx.font = '700 11px "JetBrains Mono", monospace';
     ctx.fillStyle = isBreached ? '#ef4444' : '#c084fc';
-    ctx.fillText(`ZONE: ${zoneName.toUpperCase()} [${isBreached ? 'BREACHED!' : 'RESTRICTED'}]`, tagX, tagY);
+    ctx.fillText(`GEOFENCE: ${zoneName.toUpperCase()} [${isBreached ? 'BREACHED!' : 'RESTRICTED'}]`, tagX, tagY);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws custom interactive polygon zone in authoring mode.
+   */
+  drawDraftPolygon(vertices, currentMousePos) {
+    if (!vertices || vertices.length === 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+
+    ctx.beginPath();
+    ctx.moveTo(vertices[0][0], vertices[0][1]);
+    for (let i = 1; i < vertices.length; i++) {
+      ctx.lineTo(vertices[i][0], vertices[i][1]);
+    }
+    if (currentMousePos) {
+      ctx.lineTo(currentMousePos.x, currentMousePos.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw vertex handle dots
+    for (let i = 0; i < vertices.length; i++) {
+      const v = vertices[i];
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(v[0], v[1], 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Helper text
+    ctx.font = '600 11px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText(`DRAWING GEOFENCE: ${vertices.length} vertices (Double-click or click first point to close)`, 16, this.canvas.height - 20);
 
     ctx.restore();
   }

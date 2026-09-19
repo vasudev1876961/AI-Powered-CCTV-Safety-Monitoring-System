@@ -1,8 +1,8 @@
 /**
  * QASD - Explainable AI (XAI) & Evidence Dossier Module
- * Assembles temporal critical frames, Grad-CAM attention heatmaps,
- * kinematic velocity charts, natural-language causality breakdowns,
- * and synthesized Web Audio alert tones.
+ * Assembles temporal critical frames, animated incident replay scrubber,
+ * Grad-CAM attention heatmaps, kinematic velocity charts, natural-language causality,
+ * report printing, and synthesized Web Audio alert tones.
  */
 
 class XAIEvidenceManager {
@@ -14,6 +14,11 @@ class XAIEvidenceManager {
     this.modalOverlay = document.getElementById('evidenceModalOverlay');
     this.toastContainer = document.getElementById('toastContainer');
     this.currentInspectedAlert = null;
+
+    // Animated Replay state
+    this.replayInterval = null;
+    this.replayIndex = 0;
+    this.isPlayingReplay = false;
 
     this.initAudio();
     this.initModalEvents();
@@ -116,17 +121,16 @@ class XAIEvidenceManager {
   }
 
   recordFrameSnapshot(canvas, frameId, timestamp) {
-    // Keep small thumbnail for temporal carousel
     const thumbCanvas = document.createElement('canvas');
-    thumbCanvas.width = 240;
-    thumbCanvas.height = 135;
+    thumbCanvas.width = 320;
+    thumbCanvas.height = 180;
     const tCtx = thumbCanvas.getContext('2d');
-    tCtx.drawImage(canvas, 0, 0, 240, 135);
+    tCtx.drawImage(canvas, 0, 0, 320, 180);
 
     this.frameBuffer.push({
       frameId,
       timestamp: timestamp || Date.now() / 1000,
-      dataUrl: thumbCanvas.toDataURL('image/jpeg', 0.65)
+      dataUrl: thumbCanvas.toDataURL('image/jpeg', 0.7)
     });
 
     if (this.frameBuffer.length > this.maxBuffer) {
@@ -136,6 +140,7 @@ class XAIEvidenceManager {
 
   openEvidenceModal(alert) {
     this.currentInspectedAlert = alert;
+    this.stopReplay();
 
     document.getElementById('modalIncidentType').textContent = alert.incidentType;
     document.getElementById('modalCameraId').textContent = alert.cameraId || 'CAM_02';
@@ -148,22 +153,37 @@ class XAIEvidenceManager {
     kfContainer.innerHTML = '';
 
     const bufLen = this.frameBuffer.length;
-    if (bufLen > 0) {
-      const framesToPick = [
-        { label: 'T-2.0s (Pre-Incident Normal)', item: this.frameBuffer[0] },
-        { label: 'T-0.5s (Kinetic Transition)', item: this.frameBuffer[Math.floor(bufLen / 2)] },
-        { label: 'T=0.0s (Incident Trigger)', item: this.frameBuffer[bufLen - 1] }
-      ];
+    const pickedFrames = [];
 
-      for (const f of framesToPick) {
-        const card = document.createElement('div');
-        card.className = 'key-frame-card';
-        card.innerHTML = `
-          <div class="frame-tag">${f.label}</div>
-          <img class="key-frame-img" src="${f.item.dataUrl}" alt="${f.label}">
-        `;
-        kfContainer.appendChild(card);
-      }
+    if (bufLen >= 3) {
+      pickedFrames.push({ label: 'T-2.0s (Pre-Incident Baseline)', item: this.frameBuffer[0] });
+      pickedFrames.push({ label: 'T-0.5s (Kinetic Abrupt Deviation)', item: this.frameBuffer[Math.floor(bufLen / 2)] });
+      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Frame)', item: this.frameBuffer[bufLen - 1] });
+    } else if (bufLen > 0) {
+      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Frame)', item: this.frameBuffer[bufLen - 1] });
+    }
+
+    pickedFrames.forEach((f, idx) => {
+      const card = document.createElement('div');
+      card.className = `key-frame-card ${idx === pickedFrames.length - 1 ? 'active' : ''}`;
+      card.id = `keyFrameCard_${idx}`;
+      card.innerHTML = `
+        <div class="frame-tag">${f.label}</div>
+        <img class="key-frame-img" src="${f.item.dataUrl}" alt="${f.label}">
+      `;
+      card.addEventListener('click', () => {
+        this.selectKeyFrame(idx, pickedFrames);
+      });
+      kfContainer.appendChild(card);
+    });
+
+    this.currentPickedFrames = pickedFrames;
+
+    // Scrubber setup
+    const scrubber = document.getElementById('scrubberKeyframe');
+    if (scrubber) {
+      scrubber.max = Math.max(0, pickedFrames.length - 1);
+      scrubber.value = Math.max(0, pickedFrames.length - 1);
     }
 
     // 2. Render Grad-CAM Saliency Attention Map
@@ -194,6 +214,53 @@ class XAIEvidenceManager {
     this.modalOverlay.classList.add('active');
   }
 
+  selectKeyFrame(idx, frames) {
+    if (!frames || !frames[idx]) return;
+    document.querySelectorAll('.key-frame-card').forEach(c => c.classList.remove('active'));
+    const target = document.getElementById(`keyFrameCard_${idx}`);
+    if (target) target.classList.add('active');
+
+    const scrubber = document.getElementById('scrubberKeyframe');
+    if (scrubber) scrubber.value = idx;
+  }
+
+  toggleReplay() {
+    if (this.isPlayingReplay) {
+      this.stopReplay();
+    } else {
+      this.startReplay();
+    }
+  }
+
+  startReplay() {
+    if (!this.currentPickedFrames || this.currentPickedFrames.length <= 1) return;
+    this.isPlayingReplay = true;
+    const btn = document.getElementById('btnPlayKeyframeReplay');
+    if (btn) btn.textContent = 'Pause Replay';
+
+    this.replayIndex = 0;
+    this.selectKeyFrame(this.replayIndex, this.currentPickedFrames);
+
+    this.replayInterval = setInterval(() => {
+      this.replayIndex = (this.replayIndex + 1) % this.currentPickedFrames.length;
+      this.selectKeyFrame(this.replayIndex, this.currentPickedFrames);
+    }, 650);
+  }
+
+  stopReplay() {
+    this.isPlayingReplay = false;
+    if (this.replayInterval) {
+      clearInterval(this.replayInterval);
+      this.replayInterval = null;
+    }
+    const btn = document.getElementById('btnPlayKeyframeReplay');
+    if (btn) btn.textContent = 'Play Replay';
+  }
+
+  printForensicReport() {
+    window.print();
+  }
+
   renderModalGradCam(alert) {
     const canvas = document.getElementById('modalGradCamCanvas');
     const ctx = canvas.getContext('2d');
@@ -221,7 +288,7 @@ class XAIEvidenceManager {
 
     ctx.font = '10px "JetBrains Mono", monospace';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('PEAK ATTENTION: 98.4%', cx - 45, cy - 42);
+    ctx.fillText('PEAK GRAD-CAM ATTENTION: 98.4%', cx - 65, cy - 42);
   }
 
   renderModalKinematics(alert) {
@@ -242,8 +309,8 @@ class XAIEvidenceManager {
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(35, 140);
-    ctx.quadraticCurveTo(150, 135, 220, 40); // Sudden spike in downward drop
-    ctx.lineTo(330, 160); // Settles at floor
+    ctx.quadraticCurveTo(150, 135, 220, 40);
+    ctx.lineTo(330, 160);
     ctx.stroke();
 
     // Aspect ratio curve
@@ -253,7 +320,7 @@ class XAIEvidenceManager {
     ctx.beginPath();
     ctx.moveTo(35, 155);
     ctx.lineTo(200, 150);
-    ctx.lineTo(250, 60); // Inverts to horizontal
+    ctx.lineTo(250, 60);
     ctx.lineTo(330, 60);
     ctx.stroke();
     ctx.setLineDash([]);
@@ -261,18 +328,20 @@ class XAIEvidenceManager {
     // Legend
     ctx.font = '10px "JetBrains Mono", monospace';
     ctx.fillStyle = '#ef4444';
-    ctx.fillText('Down Velocity (px/s)', 45, 20);
+    ctx.fillText('Velocity (px/s)', 45, 20);
     ctx.fillStyle = '#00f2fe';
-    ctx.fillText('Aspect Ratio (w/h)', 190, 20);
+    ctx.fillText('Aspect Ratio (w/h)', 180, 20);
   }
 
   initModalEvents() {
     document.getElementById('btnModalClose').addEventListener('click', () => {
+      this.stopReplay();
       this.modalOverlay.classList.remove('active');
     });
 
     this.modalOverlay.addEventListener('click', (e) => {
       if (e.target === this.modalOverlay) {
+        this.stopReplay();
         this.modalOverlay.classList.remove('active');
       }
     });
@@ -281,15 +350,39 @@ class XAIEvidenceManager {
       if (this.currentInspectedAlert) {
         this.currentInspectedAlert.acknowledged = true;
       }
+      this.stopReplay();
       this.modalOverlay.classList.remove('active');
     });
+
+    const btnPlay = document.getElementById('btnPlayKeyframeReplay');
+    if (btnPlay) {
+      btnPlay.addEventListener('click', () => {
+        this.toggleReplay();
+      });
+    }
+
+    const scrubber = document.getElementById('scrubberKeyframe');
+    if (scrubber) {
+      scrubber.addEventListener('input', (e) => {
+        this.stopReplay();
+        const val = parseInt(e.target.value);
+        this.selectKeyFrame(val, this.currentPickedFrames);
+      });
+    }
+
+    const btnPrint = document.getElementById('btnPrintReport');
+    if (btnPrint) {
+      btnPrint.addEventListener('click', () => {
+        this.printForensicReport();
+      });
+    }
 
     document.getElementById('btnExportDossierJson').addEventListener('click', () => {
       if (!this.currentInspectedAlert) return;
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(this.currentInspectedAlert, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute('href', dataStr);
-      downloadAnchor.setAttribute('download', `qasd_evidence_${Date.now()}.json`);
+      downloadAnchor.setAttribute('download', `qasd_forensic_evidence_${Date.now()}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
