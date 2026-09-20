@@ -483,8 +483,8 @@ async def get_config():
     return {
         "camera": engine.current_camera,
         "enhancement_mode": engine.enhancement_mode,
-        "fall_velocity_threshold": engine.fall_detector.vertical_velocity_thresh,
-        "violence_proximity_dist": engine.violence_detector.proximity_dist,
+        "fall_velocity_threshold": engine.fall_detector.velocity_thresh,
+        "violence_proximity_dist": engine.violence_detector.proximity_thresh,
         "anomaly_threshold": engine.anomaly_detector.anomaly_threshold,
         "alert_cooldown": engine.alert_manager.cooldown_seconds,
     }
@@ -498,9 +498,9 @@ async def update_config(payload: Dict[str, Any]):
     if "camera" in payload:
         engine.set_camera(payload["camera"])
     if "fall_velocity_threshold" in payload:
-        engine.fall_detector.vertical_velocity_thresh = float(payload["fall_velocity_threshold"])
+        engine.fall_detector.velocity_thresh = float(payload["fall_velocity_threshold"])
     if "violence_proximity_dist" in payload:
-        engine.violence_detector.proximity_dist = float(payload["violence_proximity_dist"])
+        engine.violence_detector.proximity_thresh = float(payload["violence_proximity_dist"])
     if "anomaly_threshold" in payload:
         engine.anomaly_detector.anomaly_threshold = float(payload["anomaly_threshold"])
     return {"status": "updated", "config": payload}
