@@ -101,3 +101,28 @@ class TrackHistory:
             else:
                 break
         return stationary_time
+
+    def get_predicted_bbox(self, dt: float = 0.04) -> List[int]:
+        """Predicts future bounding box using recent linear velocity extrapolation."""
+        if not self.bboxes:
+            return [0, 0, 0, 0]
+        curr_bbox = self.bboxes[-1]
+        if not self.velocities:
+            return curr_bbox
+        vx, vy = self.velocities[-1]
+        dx = int(vx * dt)
+        dy = int(vy * dt)
+        return [
+            curr_bbox[0] + dx,
+            curr_bbox[1] + dy,
+            curr_bbox[2] + dx,
+            curr_bbox[3] + dy,
+        ]
+
+    def get_kinetic_oscillation(self, window: int = 6) -> float:
+        """Computes rapid velocity variance / jitter indicative of stumbling, struggling or agitation."""
+        if len(self.velocities) < 3:
+            return 0.0
+        recent = np.array(self.velocities[-window:])
+        speeds = np.linalg.norm(recent, axis=1)
+        return float(np.var(speeds))

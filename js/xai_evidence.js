@@ -20,8 +20,13 @@ class XAIEvidenceManager {
     this.replayIndex = 0;
     this.isPlayingReplay = false;
 
+    this.volume = 0.7;
     this.initAudio();
     this.initModalEvents();
+  }
+
+  setVolume(volPercent) {
+    this.volume = Math.max(0, Math.min(1, volPercent / 100));
   }
 
   initAudio() {
@@ -54,7 +59,7 @@ class XAIEvidenceManager {
         osc.frequency.setValueAtTime(880, now);
         osc.frequency.setValueAtTime(660, now + 0.12);
         osc.frequency.setValueAtTime(880, now + 0.24);
-        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.setValueAtTime(0.18 * this.volume, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
         osc.start(now);
         osc.stop(now + 0.45);
@@ -63,7 +68,7 @@ class XAIEvidenceManager {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(520, now);
         osc.frequency.setValueAtTime(650, now + 0.1);
-        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.setValueAtTime(0.12 * this.volume, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
         osc.start(now);
         osc.stop(now + 0.3);
@@ -148,42 +153,22 @@ class XAIEvidenceManager {
     document.getElementById('modalRiskScore').textContent = `${alert.riskScore.toFixed(2)} (${alert.severity})`;
     document.getElementById('modalQuality').textContent = alert.qualityState || 'MODERATE';
 
-    // 1. Key Frames Temporal Carousel
-    const kfContainer = document.getElementById('modalKeyFramesContainer');
-    kfContainer.innerHTML = '';
+    this.renderKeyFrames(pickedFrames);
 
-    const bufLen = this.frameBuffer.length;
-    const pickedFrames = [];
-
-    if (bufLen >= 3) {
-      pickedFrames.push({ label: 'T-2.0s (Pre-Incident Baseline)', item: this.frameBuffer[0] });
-      pickedFrames.push({ label: 'T-0.5s (Kinetic Abrupt Deviation)', item: this.frameBuffer[Math.floor(bufLen / 2)] });
-      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Frame)', item: this.frameBuffer[bufLen - 1] });
-    } else if (bufLen > 0) {
-      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Frame)', item: this.frameBuffer[bufLen - 1] });
-    }
-
-    pickedFrames.forEach((f, idx) => {
-      const card = document.createElement('div');
-      card.className = `key-frame-card ${idx === pickedFrames.length - 1 ? 'active' : ''}`;
-      card.id = `keyFrameCard_${idx}`;
-      card.innerHTML = `
-        <div class="frame-tag">${f.label}</div>
-        <img class="key-frame-img" src="${f.item.dataUrl}" alt="${f.label}">
-      `;
-      card.addEventListener('click', () => {
-        this.selectKeyFrame(idx, pickedFrames);
-      });
-      kfContainer.appendChild(card);
-    });
-
-    this.currentPickedFrames = pickedFrames;
-
-    // Scrubber setup
-    const scrubber = document.getElementById('scrubberKeyframe');
-    if (scrubber) {
-      scrubber.max = Math.max(0, pickedFrames.length - 1);
-      scrubber.value = Math.max(0, pickedFrames.length - 1);
+    // Fetch server-side forensic evidence pack if available
+    if (alert.id) {
+      fetch(`/api/evidence/${alert.id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.key_frames && data.key_frames.length > 0) {
+            const serverFrames = data.key_frames.map(kf => ({
+              label: `${kf.label} (${kf.timestamp}s)`,
+              item: { dataUrl: kf.image_b64 }
+            }));
+            this.renderKeyFrames(serverFrames);
+          }
+        })
+        .catch(() => {});
     }
 
     // 2. Render Grad-CAM Saliency Attention Map
@@ -387,6 +372,37 @@ class XAIEvidenceManager {
       downloadAnchor.click();
       downloadAnchor.remove();
     });
+  }
+
+  renderKeyFrames(frames) {
+    const kfContainer = document.getElementById('modalKeyFramesContainer');
+    if (!kfContainer) return;
+    kfContainer.innerHTML = '';
+    this.currentPickedFrames = frames;
+
+    frames.forEach((f, idx) => {
+      const card = document.createElement('div');
+      card.className = `key-frame-card ${idx === frames.length - 1 ? 'active' : ''}`;
+      card.id = `keyFrameCard_${idx}`;
+      card.innerHTML = `
+        <div class="frame-tag">${f.label}</div>
+        <img class="key-frame-img" src="${f.item.dataUrl}" alt="${f.label}">
+      `;
+      card.addEventListener('click', () => {
+        this.selectKeyFrame(idx, frames);
+      });
+      kfContainer.appendChild(card);
+    });
+
+    const scrubber = document.getElementById('scrubberKeyframe');
+    if (scrubber) {
+      scrubber.max = Math.max(0, frames.length - 1);
+      scrubber.value = Math.max(0, frames.length - 1);
+    }
+  }
+
+  printForensicReport() {
+    window.print();
   }
 }
 

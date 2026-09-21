@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -85,6 +85,8 @@ class SurveillancePipelineEngine:
         self.anomaly_detector = TemporalAnomalyDetector()
         self.alert_manager = SafetyAlertManager()
         self.evidence_recorder = EvidenceRecorder()
+        self.evidence_store: Dict[str, Dict[str, Any]] = {}
+        self.last_enhanced_frame: Optional[np.ndarray] = None
 
         # Operational State
         self.current_camera = "CAM_01"
@@ -266,6 +268,10 @@ class SurveillancePipelineEngine:
                 enhanced_frame = self.deblurrer.deblur(enhanced_frame, blur_score=q_metrics["blur_score"])
                 enhancement_flags["deblur"] = True
 
+        # Record into rolling evidence buffer
+        self.evidence_recorder.record_frame(frame, self.frame_index, timestamp=now)
+        self.last_enhanced_frame = enhanced_frame.copy()
+
         # 3. Object Detection (YOLO / Fallback)
         raw_detections = self.detector.detect(enhanced_frame)
 
@@ -293,8 +299,11 @@ class SurveillancePipelineEngine:
         bag_alerts = self.abandoned_detector.evaluate(active_tracks)
         detected_incidents.extend(bag_alerts)
 
-        # E. Temporal Anomaly Score
-        anomaly_score = self.anomaly_detector.evaluate(active_tracks, frame.shape[:2])
+        # E. Temporal Anomaly Score (Dict unpacking fix)
+        anomaly_res = self.anomaly_detector.evaluate(active_tracks, frame.shape[:2])
+        anomaly_score = float(anomaly_res.get("anomaly_score", 0.15))
+        if anomaly_res.get("alert"):
+            detected_incidents.append(anomaly_res["alert"])
 
         # 6. Multi-Factor Risk Assessment & Alert Dispatch
         processed_alerts = []
@@ -308,6 +317,16 @@ class SurveillancePipelineEngine:
                 quality_factor=q_factor
             )
             if alert:
+                # Assemble forensic evidence package
+                ev_pack = self.evidence_recorder.assemble_evidence_pack(
+                    alert=alert,
+                    camera_id=self.current_camera,
+                    quality_metrics=q_metrics,
+                    risk_score=alert["risk_score"]
+                )
+                self.evidence_store[alert["id"]] = ev_pack
+                alert["has_evidence"] = True
+
                 processed_alerts.append(alert)
                 if alert["risk_score"] > max_risk:
                     max_risk = alert["risk_score"]
@@ -591,6 +610,11 @@ async def analyze_video(file: UploadFile = File(...)):
     except Exception:
         pass
 
+    avg_brightness = float(np.mean([q["brightness"] for q in quality_timeline])) if quality_timeline else 120.0
+    avg_blur = float(np.mean([q["blur_score"] for q in quality_timeline])) if quality_timeline else 150.0
+    degraded_count = sum(1 for q in quality_timeline if q["quality_state"] in ["DEGRADED", "SEVERELY DEGRADED"])
+    degraded_pct = round((degraded_count / max(1, len(quality_timeline))) * 100, 1)
+
     return {
         "filename": file.filename,
         "total_frames": total_frames,
@@ -598,9 +622,81 @@ async def analyze_video(file: UploadFile = File(...)):
         "sampled_frames_evaluated": sampled_frames,
         "total_incidents_detected": len(detected_incidents),
         "incidents": detected_incidents,
-        "quality_timeline": quality_timeline[:100],  # Sample limit
-        "anomaly_timeline": anomaly_timeline[:100],
+        "quality_summary": {
+            "average_lux": round(avg_brightness, 1),
+            "average_blur": round(avg_blur, 1),
+            "degraded_frames_percentage": degraded_pct,
+            "recommended_enhancement": "ADAPTIVE_CLAHE_DENOISE" if degraded_pct > 20 else "BYPASS",
+        },
+        "quality_timeline": quality_timeline[:120],
+        "anomaly_timeline": anomaly_timeline[:120],
     }
+
+
+# -----------------------------------------------------------------------------
+# Forensic Evidence Dossier & Streaming Endpoints
+# -----------------------------------------------------------------------------
+@app.get("/api/evidence")
+async def list_all_evidence():
+    """Returns list of stored forensic evidence dossiers."""
+    return list(engine.evidence_store.values())
+
+
+@app.get("/api/evidence/{alert_id}")
+async def get_evidence_dossier(alert_id: str):
+    """Retrieves specific forensic evidence dossier by alert ID."""
+    pack = engine.evidence_store.get(alert_id)
+    if not pack:
+        # Check if alert exists in alert history to assemble on demand
+        for a in engine.alert_manager.alert_history:
+            if a.get("id") == alert_id:
+                return engine.evidence_recorder.assemble_evidence_pack(
+                    alert=a,
+                    camera_id=a.get("camera_id", engine.current_camera),
+                    quality_metrics={"quality_state": "HISTORICAL"},
+                    risk_score=a.get("risk_score", 0.5)
+                )
+        return JSONResponse({"error": "Evidence dossier not found"}, status_code=404)
+    return pack
+
+
+@app.get("/api/stream/{cam_id}")
+async def video_mjpeg_stream(cam_id: str = "CAM_01"):
+    """
+    Real-Time MJPEG Streaming Endpoint with tactical OSD overlay.
+    Usable in any browser `<img src="/api/stream/CAM_01">` or external CCTV monitor.
+    """
+    async def frame_generator():
+        while True:
+            frame = engine.generate_camera_frame(cam_id)
+            telemetry = engine.process_frame(frame)
+            vis = engine.last_enhanced_frame.copy() if engine.last_enhanced_frame is not None else frame.copy()
+
+            # Burn in tactical bounding boxes & labels
+            for det in telemetry.get("detections", []):
+                x1, y1, x2, y2 = det["bbox"]
+                cls_name = det["class"].upper()
+                conf = det["conf"]
+                is_crit = telemetry.get("severity") in ["CRITICAL", "HIGH"]
+                box_color = (0, 70, 255) if is_crit else (254, 242, 0)
+                cv2.rectangle(vis, (x1, y1), (x2, y2), box_color, 2)
+                cv2.putText(vis, f"ID#{det['id']} {cls_name} {conf:.2f}",
+                            (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.52, box_color, 2)
+
+            # Burn in OSD header
+            cv2.putText(vis, f"QASD LIVE STREAM // {cam_id} // FPS: {telemetry.get('fps', 25.0)}",
+                        (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, (0, 255, 180), 2)
+            cv2.putText(vis, f"QUALITY: {telemetry['quality']['quality_state']} | RISK: {telemetry['risk_score']} ({telemetry['severity']})",
+                        (15, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (255, 255, 255), 1)
+
+            ret, buffer = cv2.imencode('.jpg', vis, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if ret:
+                frame_bytes = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            await asyncio.sleep(0.04)
+
+    return StreamingResponse(frame_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 # -----------------------------------------------------------------------------

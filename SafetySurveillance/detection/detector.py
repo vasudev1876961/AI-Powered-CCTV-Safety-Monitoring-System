@@ -4,8 +4,11 @@ Wraps YOLO (YOLOv8/YOLO11) detector for person, vehicle, and item detection.
 Includes an intelligent fallback simulator when running in lightweight test environments.
 """
 
+from pathlib import Path
 import numpy as np
 from typing import List, Dict, Any
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class ObjectDetector:
@@ -31,14 +34,22 @@ class ObjectDetector:
             28: "suitcase",
         }
         self.model = None
+        self.device = "cpu"
         self._init_model(model_name)
 
     def _init_model(self, model_name: str):
         """Initializes Ultralytics YOLO if installed, else activates fallback."""
         try:
+            import torch
             from ultralytics import YOLO
-            self.model = YOLO(model_name)
-            print(f"[Detector] Successfully loaded YOLO model: {model_name}")
+
+            # Resolve local model path if exists
+            local_model_path = BASE_DIR / model_name
+            target_path = str(local_model_path) if local_model_path.exists() else model_name
+
+            self.model = YOLO(target_path)
+            self.device = "0" if torch.cuda.is_available() else "cpu"
+            print(f"[Detector] Successfully loaded YOLO model: {target_path} on {self.device}")
         except Exception as e:
             print(f"[Detector] Notice: Running in standalone simulated mode ({e})")
             self.model = None
@@ -62,6 +73,7 @@ class ObjectDetector:
                     conf=self.conf_thresh,
                     iou=self.iou_thresh,
                     classes=self.target_classes,
+                    device=self.device,
                     verbose=False,
                 )
                 detections = []

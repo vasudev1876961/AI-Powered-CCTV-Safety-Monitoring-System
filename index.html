@@ -65,11 +65,14 @@
         <span class="label">Backend Status</span>
         <span class="val" id="topWsVal" style="color: var(--accent-cyan);">CLIENT SIM</span>
       </div>
-      <button class="action-btn-icon" id="btnToggleSound" title="Toggle Alarm Sound" aria-label="Toggle Alert Sound">
-        <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-        </svg>
-      </button>
+      <div class="audio-ctrl-group">
+        <button class="action-btn-icon" id="btnToggleSound" title="Toggle Alarm Sound" aria-label="Toggle Alert Sound">
+          <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </button>
+        <input type="range" id="sliderAlertVolume" class="audio-volume-slider" min="0" max="100" value="70" title="Alarm Tone Volume">
+      </div>
     </div>
   </header>
 
@@ -120,6 +123,10 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
               <span>Upload Video</span>
             </label>
+            <button class="cam-btn" id="btnAuditVideo" style="display: none; color: var(--accent-cyan);" title="Run deep AI forensic audit on uploaded video">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+              <span>Audit Video Report</span>
+            </button>
             <button class="cam-btn" id="btnWebcam">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
               <span>Webcam</span>
@@ -544,6 +551,70 @@
           <button class="cam-btn" id="btnPrintReport" title="Print formal incident audit report">Print Forensic Report</button>
           <button class="cam-btn" id="btnExportDossierJson">Export Evidence JSON</button>
           <button class="cam-btn active" id="btnAckIncident">Acknowledge & Archive</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       BATCH VIDEO FORENSIC AUDIT MODAL
+       ========================================================================== -->
+  <div class="audit-modal-overlay" id="auditModalOverlay">
+    <div class="audit-modal" role="dialog" aria-modal="true" aria-labelledby="auditTitle">
+      <div class="audit-header">
+        <h2 id="auditTitle">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-cyan);"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          Automated CCTV Video Forensic Audit Dossier
+        </h2>
+        <button class="modal-close-btn" id="btnAuditModalClose" aria-label="Close modal">&times;</button>
+      </div>
+
+      <div class="audit-body">
+        <!-- Progress bar when processing -->
+        <div id="auditProgressContainer" style="display: none;">
+          <div style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.76rem; margin-bottom: 6px; color: var(--text-muted);">
+            <span>RUNNING MULTI-FACTOR QASD PIPELINE (CLAHE &bull; YOLO &bull; BYTETRACK &bull; KINEMATICS)...</span>
+            <span id="auditProgressVal">Processing...</span>
+          </div>
+          <div class="audit-progress-wrap">
+            <div class="audit-progress-bar" id="auditProgressBar" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- Summary Metric Tiles -->
+        <div class="audit-summary-grid" id="auditSummaryGrid">
+          <div class="audit-metric-tile">
+            <span class="tile-label">Audited Video</span>
+            <span class="tile-val" id="auditFileName" style="font-size: 0.88rem; word-break: break-all;">-</span>
+          </div>
+          <div class="audit-metric-tile">
+            <span class="tile-label">Duration</span>
+            <span class="tile-val" id="auditDuration">-</span>
+          </div>
+          <div class="audit-metric-tile">
+            <span class="tile-label">Incidents Flagged</span>
+            <span class="tile-val" id="auditTotalIncidents" style="color: var(--accent-crimson);">-</span>
+          </div>
+          <div class="audit-metric-tile">
+            <span class="tile-label">Avg Quality / Status</span>
+            <span class="tile-val" id="auditQualityRating" style="color: var(--accent-emerald);">-</span>
+          </div>
+        </div>
+
+        <!-- Incident Timeline List -->
+        <div>
+          <h4 style="font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 10px;">
+            Identified Safety Violations & Anomaly Events
+          </h4>
+          <div id="auditIncidentsList" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <button class="cam-btn" id="btnPrintAuditReport">Print Audit Report</button>
+          <button class="cam-btn active" id="btnDismissAudit">Close Audit Dossier</button>
         </div>
       </div>
     </div>

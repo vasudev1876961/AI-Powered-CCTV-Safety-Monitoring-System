@@ -53,11 +53,27 @@ class MultiObjectTracker:
         matched_dets = set()
 
         if track_ids and det_indices:
-            # Build IoU cost matrix
+            # Build IoU cost matrix with velocity-guided motion prediction
             iou_matrix = np.zeros((len(track_ids), len(det_indices)), dtype=np.float32)
             for i, tid in enumerate(track_ids):
+                tdata = self.tracks[tid]
+                dt = max(0.01, min(0.5, now - tdata.get("last_timestamp", now)))
+                pred_bbox = tdata["history"].get_predicted_bbox(dt=dt)
+
                 for j, d_idx in enumerate(det_indices):
-                    iou_matrix[i, j] = compute_iou(self.tracks[tid]["bbox"], detections[d_idx]["bbox"])
+                    d_bbox = detections[d_idx]["bbox"]
+                    # Calculate IoU with both last known and velocity-predicted positions
+                    iou_static = compute_iou(tdata["bbox"], d_bbox)
+                    iou_pred = compute_iou(pred_bbox, d_bbox)
+                    best_iou = max(iou_static, iou_pred)
+
+                    # Class consistency prior
+                    if tdata["class"] == detections[d_idx]["class"]:
+                        best_iou = min(1.0, best_iou + 0.05)
+                    else:
+                        best_iou *= 0.5  # Penalize class mismatch
+
+                    iou_matrix[i, j] = best_iou
 
             # Greedy bipartite matching
             while True:
@@ -73,6 +89,7 @@ class MultiObjectTracker:
                 self.tracks[tid]["conf"] = d["conf"]
                 self.tracks[tid]["class"] = d["class"]
                 self.tracks[tid]["lost_frames"] = 0
+                self.tracks[tid]["last_timestamp"] = now
                 self.tracks[tid]["history"].update(d["bbox"], now)
 
                 matched_tracks.add(tid)
