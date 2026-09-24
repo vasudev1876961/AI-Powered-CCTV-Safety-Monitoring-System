@@ -25,6 +25,8 @@ from SafetySurveillance.tracking.tracker import MultiObjectTracker
 from SafetySurveillance.incidents.fall import FallDetector
 from SafetySurveillance.incidents.violence import ViolenceDetector
 from SafetySurveillance.incidents.intrusion import IntrusionDetector
+from SafetySurveillance.incidents.abandoned_object import AbandonedObjectDetector
+from SafetySurveillance.incidents.anomaly import TemporalAnomalyDetector
 from SafetySurveillance.alerts.alert_manager import SafetyAlertManager
 
 
@@ -40,6 +42,12 @@ def run_demo(source: str = "synthetic", enable_enhancement: bool = True):
     tracker = MultiObjectTracker()
     fall_det = FallDetector()
     violence_det = ViolenceDetector()
+    intrusion_det = IntrusionDetector(restricted_zones=[{
+        "name": "Restricted Vault Zone",
+        "polygon": [[120, 100], [540, 100], [580, 420], [80, 420]]
+    }])
+    abandoned_det = AbandonedObjectDetector()
+    anomaly_det = TemporalAnomalyDetector()
     alert_mgr = SafetyAlertManager()
 
     # Open video capture if webcam or file
@@ -120,17 +128,55 @@ def run_demo(source: str = "synthetic", enable_enhancement: bool = True):
         # 4. Tracking
         tracks = tracker.update(dets, curr_time)
 
-        # 5. Incident Recognition
+        # 5. Comprehensive Incident Recognition
         active_alerts = []
+
+        # A. Fall Detection
         for t in tracks:
             fall_alert = fall_det.evaluate(t)
             if fall_alert:
-                alert = alert_mgr.process_alert("CAM_01", fall_alert, q_factor)
+                alert = alert_mgr.process_alert("CAM_01", alert_candidate=fall_alert, quality_factor=q_factor)
                 if alert:
                     active_alerts.append(alert)
 
+        # B. Violence Detection
+        violence_alerts = violence_det.evaluate(tracks)
+        for v in violence_alerts:
+            alert = alert_mgr.process_alert("CAM_01", alert_candidate=v, quality_factor=q_factor)
+            if alert:
+                active_alerts.append(alert)
+
+        # C. Perimeter Intrusion
+        intrusion_alerts = intrusion_det.evaluate(tracks)
+        for in_alt in intrusion_alerts:
+            alert = alert_mgr.process_alert("CAM_01", alert_candidate=in_alt, quality_factor=q_factor)
+            if alert:
+                active_alerts.append(alert)
+
+        # D. Abandoned Objects
+        bag_alerts = abandoned_det.evaluate(tracks)
+        for b_alt in bag_alerts:
+            alert = alert_mgr.process_alert("CAM_01", alert_candidate=b_alt, quality_factor=q_factor)
+            if alert:
+                active_alerts.append(alert)
+
+        # E. Temporal Anomaly
+        anomaly_res = anomaly_det.evaluate(tracks, processed_frame.shape[:2])
+        anomaly_score = float(anomaly_res.get("anomaly_score", 0.15))
+        if anomaly_res.get("alert"):
+            alert = alert_mgr.process_alert("CAM_01", alert_candidate=anomaly_res["alert"], quality_factor=q_factor)
+            if alert:
+                active_alerts.append(alert)
+
         # 6. Render HUD Overlays
         display_frame = processed_frame.copy()
+
+        # Draw Geofence Zone
+        for zone in intrusion_det.restricted_zones:
+            pts = np.array(zone["polygon"], np.int32).reshape((-1, 1, 2))
+            cv2.polylines(display_frame, [pts], isClosed=True, color=(0, 165, 255), thickness=2)
+            cv2.putText(display_frame, zone["name"].upper(), (zone["polygon"][0][0], zone["polygon"][0][1] - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 165, 255), 1)
 
         # Draw Tracks
         for t in tracks:
@@ -148,14 +194,15 @@ def run_demo(source: str = "synthetic", enable_enhancement: bool = True):
             )
 
         # Telemetry HUD bar
-        cv2.rectangle(display_frame, (10, 10), (330, 110), (15, 15, 15), -1)
-        cv2.rectangle(display_frame, (10, 10), (330, 110), (60, 60, 60), 1)
+        cv2.rectangle(display_frame, (10, 10), (360, 125), (15, 15, 15), -1)
+        cv2.rectangle(display_frame, (10, 10), (360, 125), (60, 60, 60), 1)
 
-        cv2.putText(display_frame, f"QASD SYSTEM | FPS: {fps:.1f}", (20, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 240, 255), 1)
+        cv2.putText(display_frame, f"QASD SYSTEM | FPS: {fps:.1f}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 240, 255), 1)
         state_color = (0, 255, 0) if q_state == "GOOD" else ((0, 180, 255) if q_state == "MODERATE" else (0, 60, 255))
-        cv2.putText(display_frame, f"Quality: {q_state} (Q: {q_factor:.2f})", (20, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.45, state_color, 1)
-        cv2.putText(display_frame, f"Lux: {q_metrics['brightness']:.1f} | Blur: {q_metrics['blur_score']:.1f}", (20, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 200, 200), 1)
-        cv2.putText(display_frame, f"Enhancement: {'ACTIVE' if enable_enhancement else 'OFF'}", (20, 94), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 200) if enable_enhancement else (100, 100, 100), 1)
+        cv2.putText(display_frame, f"Quality: {q_state} (Q: {q_factor:.2f})", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.42, state_color, 1)
+        cv2.putText(display_frame, f"Lux: {q_metrics['brightness']:.1f} | Blur: {q_metrics['blur_score']:.1f}", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (200, 200, 200), 1)
+        cv2.putText(display_frame, f"Anomaly: {anomaly_score * 100:.1f}% | Tracks: {len(tracks)}", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (254, 242, 0), 1)
+        cv2.putText(display_frame, f"Enhancement: {'ACTIVE' if enable_enhancement else 'OFF'}", (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 200) if enable_enhancement else (100, 100, 100), 1)
 
         # Active Alert Banners
         if active_alerts or (alert_mgr.alert_history and curr_time - alert_mgr.alert_history[0].get("timestamp_epoch", curr_time) < 3.0):

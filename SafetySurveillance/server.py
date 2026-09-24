@@ -466,13 +466,18 @@ async def startup_event():
 # -----------------------------------------------------------------------------
 @app.get("/api/health")
 async def health_check():
+    """System health check endpoint."""
     return {
         "status": "online",
-        "system": "QASD Surveillance AI Engine",
-        "version": "2.0.0",
+        "service": "QASD Surveillance AI Engine",
+        "version": app.version,
+        "uptime_seconds": round(time.time() - engine.last_process_time, 1),
         "active_camera": engine.current_camera,
         "enhancement_mode": engine.enhancement_mode,
         "active_clients": len(ws_manager.active_sockets),
+        "active_tracks_count": len(engine.tracker.tracks),
+        "total_alerts_logged": len(engine.alert_manager.alert_history),
+        "device": getattr(engine.detector, "device", "cpu"),
         "timestamp": time.time(),
     }
 
@@ -506,6 +511,36 @@ async def get_config():
         "violence_proximity_dist": engine.violence_detector.proximity_thresh,
         "anomaly_threshold": engine.anomaly_detector.anomaly_threshold,
         "alert_cooldown": engine.alert_manager.cooldown_seconds,
+    }
+
+
+@app.get("/api/system_info")
+async def system_info():
+    """Provides detailed pipeline topology and configuration."""
+    return {
+        "system": "QASD (Quality-Aware Safety Detection)",
+        "version": app.version,
+        "cameras": ["CAM_01", "CAM_02", "CAM_03", "CAM_04", "QUAD"],
+        "current_camera": engine.current_camera,
+        "enhancement_mode": engine.enhancement_mode,
+        "detector": {
+            "model": "yolov8n.pt",
+            "device": getattr(engine.detector, "device", "cpu"),
+            "target_classes": getattr(engine.detector, "target_classes", []),
+        },
+        "tracker": {
+            "active_tracks": len(engine.tracker.tracks),
+            "iou_threshold": engine.tracker.iou_thresh,
+            "max_lost_frames": engine.tracker.max_lost_frames,
+        },
+        "incident_detectors": {
+            "fall_velocity_threshold": engine.fall_detector.velocity_thresh,
+            "fall_aspect_ratio_threshold": engine.fall_detector.aspect_ratio_thresh,
+            "violence_proximity_dist": engine.violence_detector.proximity_thresh,
+            "anomaly_threshold": engine.anomaly_detector.anomaly_threshold,
+            "restricted_zones": engine.intrusion_detector.restricted_zones,
+        },
+        "evidence_store_items": len(engine.evidence_store),
     }
 
 

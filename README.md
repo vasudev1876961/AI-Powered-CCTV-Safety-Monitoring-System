@@ -6,6 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%7C%20WebSockets-green)](https://fastapi.tiangolo.com/)
 [![Computer Vision](https://img.shields.io/badge/CV-OpenCV%20%7C%20YOLO-orange)](https://github.com/ultralytics/ultralytics)
+[![CI Pipeline](https://github.com/vasudev1876961/AI-Powered-CCTV-Safety-Monitoring-System/actions/workflows/ci.yml/badge.svg)](https://github.com/vasudev1876961/AI-Powered-CCTV-Safety-Monitoring-System/actions/workflows/ci.yml)
 
 ---
 
@@ -109,6 +110,10 @@ Traditional CCTV surveillance relies heavily on human operators continuously rev
 ```
 SafetySurveillance/
 │
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # GitHub Actions CI matrix workflow (Py 3.10-3.12)
+│
 ├── css/
 │   └── styles.css                  # Cyber-defense obsidian UI design system
 │
@@ -120,6 +125,13 @@ SafetySurveillance/
 │   ├── incident_engine.js          # Fall, violence, intrusion, loitering, and anomaly logic
 │   ├── xai_evidence.js             # Forensic dossier, Grad-CAM, audio synthesizer
 │   └── benchmark_runner.js         # Benchmark laboratory & interactive comparison charts
+│
+├── tests/                          # Automated Unit & Integration Test Suite
+│   ├── test_preprocessing.py       # Quality assessment, CLAHE, denoise, deblur, degradation
+│   ├── test_tracking_kinematics.py # ByteTrack associations, velocity prediction, dwell time
+│   ├── test_incidents.py           # Fall, violence, intrusion, abandoned luggage, anomaly
+│   ├── test_alerts_evidence.py     # Multi-factor risk formula, cooldown, XAI evidence
+│   └── test_server_api.py          # FastAPI REST endpoints and WebSocket integration
 │
 ├── SafetySurveillance/             # Python Backend Package
 │   ├── configs/
@@ -215,7 +227,29 @@ python SafetySurveillance/scripts/evaluate.py
 ```
 Outputs formatted ASCII comparison tables and updates `benchmark_results.json`.
 
+### Option E: Running Automated Unit & Integration Tests
+```bash
+# Execute all 28 automated test suites across preprocessing, tracking, incidents, and APIs
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
 ---
 
-## 7. License
+## 7. REST & WebSocket API Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/ws/detections` | WebSocket | Real-time bi-directional pipeline telemetry & control |
+| `/api/stream/{cam_id}` | GET | Live MJPEG video stream with burned-in HUD telemetry |
+| `/api/analyze_video` | POST | Deep forensic audit on uploaded MP4/AVI CCTV video files |
+| `/api/health` | GET | System uptime, loaded model, device, and active camera state |
+| `/api/system_info` | GET | Complete pipeline topology, detector classes, and geofences |
+| `/api/evidence` | GET | List all stored forensic evidence packs |
+| `/api/evidence/{alert_id}` | GET | Retrieve forensic dossier (key frames, Grad-CAM, reasons) |
+| `/api/config` | GET / POST | Runtime detection thresholds & camera switching |
+| `/api/benchmarks` | GET | Thesis evaluation metrics for Experiments 1 through 5 |
+
+---
+
+## 8. License
 This project is developed for academic research and final year project (FYP) demonstration under the MIT License.

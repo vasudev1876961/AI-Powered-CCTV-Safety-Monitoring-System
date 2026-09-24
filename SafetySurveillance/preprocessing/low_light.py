@@ -43,8 +43,8 @@ class LowLightEnhancer:
             gamma = float(np.log(0.5) / np.log(mean_val))
             gamma = np.clip(gamma, 0.4, 2.2)
 
-        inv_gamma = 1.0 / gamma
-        table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+        # When gamma < 1 (dark image), applying power of gamma brightens pixels
+        table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
         return cv2.LUT(frame, table)
 
     def apply_retinex(self, frame: np.ndarray, sigmas: list = [15, 80, 250]) -> np.ndarray:

@@ -147,11 +147,34 @@ class XAIEvidenceManager {
     this.currentInspectedAlert = alert;
     this.stopReplay();
 
-    document.getElementById('modalIncidentType').textContent = alert.incidentType;
-    document.getElementById('modalCameraId').textContent = alert.cameraId || 'CAM_02';
-    document.getElementById('modalConfidence').textContent = `${(alert.confidence * 100).toFixed(1)}%`;
-    document.getElementById('modalRiskScore').textContent = `${alert.riskScore.toFixed(2)} (${alert.severity})`;
+    const confVal = typeof alert.confidence === 'number' ? (alert.confidence * 100).toFixed(1) : parseFloat(alert.confidence || 85).toFixed(1);
+    const riskVal = typeof alert.riskScore === 'number' ? alert.riskScore.toFixed(2) : parseFloat(alert.riskScore || 0.5).toFixed(2);
+    const severityStr = alert.severity || 'HIGH';
+
+    document.getElementById('modalIncidentType').textContent = alert.incidentType || 'Safety Alert';
+    document.getElementById('modalCameraId').textContent = alert.cameraId || 'CAM_01';
+    document.getElementById('modalConfidence').textContent = `${confVal}%`;
+    document.getElementById('modalRiskScore').textContent = `${riskVal} (${severityStr})`;
     document.getElementById('modalQuality').textContent = alert.qualityState || 'MODERATE';
+
+    // 1. Initial Key Frames selection from client-side rolling frameBuffer
+    const bufLen = this.frameBuffer.length;
+    const pickedFrames = [];
+    if (bufLen >= 3) {
+      pickedFrames.push({ label: 'T-2.0s (Pre-Incident Baseline)', item: this.frameBuffer[0] });
+      pickedFrames.push({ label: 'T-0.5s (Kinetic Deviation)', item: this.frameBuffer[Math.floor(bufLen / 2)] });
+      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Moment)', item: this.frameBuffer[bufLen - 1] });
+    } else if (bufLen > 0) {
+      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Moment)', item: this.frameBuffer[bufLen - 1] });
+    } else {
+      const dummyCanvas = document.createElement('canvas');
+      dummyCanvas.width = 320; dummyCanvas.height = 180;
+      const dCtx = dummyCanvas.getContext('2d');
+      dCtx.fillStyle = '#0f172a'; dCtx.fillRect(0, 0, 320, 180);
+      dCtx.fillStyle = '#64748b'; dCtx.font = '12px monospace';
+      dCtx.fillText('EVIDENCE CAPTURED', 90, 95);
+      pickedFrames.push({ label: 'T=0.0s (Alert Trigger Moment)', item: { dataUrl: dummyCanvas.toDataURL('image/jpeg', 0.7) } });
+    }
 
     this.renderKeyFrames(pickedFrames);
 
@@ -399,10 +422,6 @@ class XAIEvidenceManager {
       scrubber.max = Math.max(0, frames.length - 1);
       scrubber.value = Math.max(0, frames.length - 1);
     }
-  }
-
-  printForensicReport() {
-    window.print();
   }
 }
 
