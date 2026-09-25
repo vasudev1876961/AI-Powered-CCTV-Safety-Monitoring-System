@@ -25,6 +25,31 @@ def compute_iou(boxA: List[int], boxB: List[int]) -> float:
     return iou
 
 
+def batch_iou(boxesA: np.ndarray, boxesB: np.ndarray) -> np.ndarray:
+    """
+    Vectorized calculation of IoU between N boxes in boxesA and M boxes in boxesB.
+    Args:
+        boxesA: np.ndarray of shape (N, 4) with [x1, y1, x2, y2]
+        boxesB: np.ndarray of shape (M, 4) with [x1, y1, x2, y2]
+    Returns:
+        np.ndarray of shape (N, M) containing IoU values in [0, 1].
+    """
+    if boxesA.size == 0 or boxesB.size == 0:
+        return np.zeros((len(boxesA), len(boxesB)), dtype=np.float32)
+
+    xA = np.maximum(boxesA[:, None, 0], boxesB[None, :, 0])
+    yA = np.maximum(boxesA[:, None, 1], boxesB[None, :, 1])
+    xB = np.minimum(boxesA[:, None, 2], boxesB[None, :, 2])
+    yB = np.minimum(boxesA[:, None, 3], boxesB[None, :, 3])
+
+    inter = np.maximum(0.0, xB - xA) * np.maximum(0.0, yB - yA)
+    areaA = np.maximum(1.0, (boxesA[:, 2] - boxesA[:, 0]) * (boxesA[:, 3] - boxesA[:, 1]))
+    areaB = np.maximum(1.0, (boxesB[:, 2] - boxesB[:, 0]) * (boxesB[:, 3] - boxesB[:, 1]))
+    union = areaA[:, None] + areaB[None, :] - inter
+
+    return (inter / np.maximum(1.0, union)).astype(np.float32)
+
+
 class MultiObjectTracker:
     """Lightweight and robust multi-object tracker for safety CCTV monitoring."""
 
@@ -36,7 +61,7 @@ class MultiObjectTracker:
 
     def update(self, detections: List[Dict[str, Any]], timestamp: float = None) -> List[Dict[str, Any]]:
         """
-        Associates incoming detections with existing tracks.
+        Associates incoming detections with existing tracks using vectorized IoU and velocity prediction.
 
         Args:
             detections: List of {'bbox': [x1, y1, x2, y2], 'class': str, 'conf': float}
@@ -53,27 +78,26 @@ class MultiObjectTracker:
         matched_dets = set()
 
         if track_ids and det_indices:
-            # Build IoU cost matrix with velocity-guided motion prediction
-            iou_matrix = np.zeros((len(track_ids), len(det_indices)), dtype=np.float32)
-            for i, tid in enumerate(track_ids):
-                tdata = self.tracks[tid]
-                dt = max(0.01, min(0.5, now - tdata.get("last_timestamp", now)))
-                pred_bbox = tdata["history"].get_predicted_bbox(dt=dt)
+            # Prepare vectorized arrays
+            static_boxes = np.array([self.tracks[tid]["bbox"] for tid in track_ids], dtype=np.float32)
+            pred_boxes = np.array([
+                self.tracks[tid]["history"].get_predicted_bbox(
+                    dt=max(0.01, min(0.5, now - self.tracks[tid].get("last_timestamp", now)))
+                )
+                for tid in track_ids
+            ], dtype=np.float32)
+            det_boxes = np.array([d["bbox"] for d in detections], dtype=np.float32)
 
-                for j, d_idx in enumerate(det_indices):
-                    d_bbox = detections[d_idx]["bbox"]
-                    # Calculate IoU with both last known and velocity-predicted positions
-                    iou_static = compute_iou(tdata["bbox"], d_bbox)
-                    iou_pred = compute_iou(pred_bbox, d_bbox)
-                    best_iou = max(iou_static, iou_pred)
+            # High-speed vectorized batch IoU
+            iou_static = batch_iou(static_boxes, det_boxes)
+            iou_pred = batch_iou(pred_boxes, det_boxes)
+            iou_matrix = np.maximum(iou_static, iou_pred)
 
-                    # Class consistency prior
-                    if tdata["class"] == detections[d_idx]["class"]:
-                        best_iou = min(1.0, best_iou + 0.05)
-                    else:
-                        best_iou *= 0.5  # Penalize class mismatch
-
-                    iou_matrix[i, j] = best_iou
+            # Class consistency prior vectorized mask
+            track_classes = np.array([self.tracks[tid]["class"] for tid in track_ids])
+            det_classes = np.array([d["class"] for d in detections])
+            match_class_mask = (track_classes[:, None] == det_classes[None, :])
+            iou_matrix = np.where(match_class_mask, np.minimum(1.0, iou_matrix + 0.05), iou_matrix * 0.5)
 
             # Greedy bipartite matching
             while True:

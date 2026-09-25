@@ -33,10 +33,17 @@ class FrameDenoiser:
         """Median filter for impulse / salt-and-pepper noise."""
         return cv2.medianBlur(frame, ksize)
 
-    def denoise(self, frame: np.ndarray, noise_level: float = 15.0) -> np.ndarray:
-        """Adaptively selects filter strength based on measured noise standard deviation."""
+    def denoise(self, frame: np.ndarray, noise_level: float = 15.0, mode: str = "realtime") -> np.ndarray:
+        """
+        Adaptively selects filter strength based on measured noise standard deviation.
+        In realtime mode, applies high-speed edge-preserving bilateral filtering (<7ms).
+        In forensic mode, applies deeper Non-Local Means.
+        """
         if noise_level > 25.0:
-            return self.fast_nlm_denoise(frame, h=12.0)
+            if mode == "forensic":
+                return self.fast_nlm_denoise(frame, h=12.0)
+            # High-speed edge-preserving filter for severe noise in real-time
+            return cv2.bilateralFilter(frame, 5, 60.0, 60.0)
         elif noise_level > 12.0:
             return self.bilateral_denoise(frame)
         return frame

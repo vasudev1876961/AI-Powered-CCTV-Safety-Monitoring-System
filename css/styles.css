@@ -1496,11 +1496,41 @@ body {
     background: #fff !important;
     color: #000 !important;
   }
-  .modal-body {
-    color: #000 !important;
-  }
   .key-frame-img {
     filter: none !important;
   }
 }
+
+/* Incident Filter Chips & Advanced Search */
+.filter-chip {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.04em;
+}
+
+.filter-chip:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.filter-chip.active {
+  background: rgba(0, 242, 254, 0.15);
+  border-color: var(--accent-cyan);
+  color: #fff;
+  box-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+
+.incident-card-hidden {
+  display: none !important;
+}
+
 

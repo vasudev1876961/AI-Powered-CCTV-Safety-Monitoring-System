@@ -229,8 +229,8 @@ Outputs formatted ASCII comparison tables and updates `benchmark_results.json`.
 
 ### Option E: Running Automated Unit & Integration Tests
 ```bash
-# Execute all 28 automated test suites across preprocessing, tracking, incidents, and APIs
-python -m unittest discover -s tests -p "test_*.py" -v
+# Execute all 32 automated test suites across preprocessing, tracking, incidents, and APIs
+pytest -v
 ```
 
 ---
@@ -240,12 +240,17 @@ python -m unittest discover -s tests -p "test_*.py" -v
 | Endpoint | Method | Description |
 |---|---|---|
 | `/ws/detections` | WebSocket | Real-time bi-directional pipeline telemetry & control |
-| `/api/stream/{cam_id}` | GET | Live MJPEG video stream with burned-in HUD telemetry |
+| `/api/stream/{cam_id}` | GET | Live MJPEG video stream with burned-in HUD telemetry (zero-cost cached broadcast) |
+| `/api/snapshot/{cam_id}` | GET | Capture high-resolution forensic snapshot with official watermarked header |
 | `/api/analyze_video` | POST | Deep forensic audit on uploaded MP4/AVI CCTV video files |
 | `/api/health` | GET | System uptime, loaded model, device, and active camera state |
 | `/api/system_info` | GET | Complete pipeline topology, detector classes, and geofences |
-| `/api/evidence` | GET | List all stored forensic evidence packs |
+| `/api/metrics/summary` | GET | Operations analytics (uptime, frames processed, severity breakdown) |
+| `/api/presets/geofences` | GET / POST | Retrieve and save named restricted security zone presets |
+| `/api/evidence` | GET | List all stored forensic evidence dossiers |
 | `/api/evidence/{alert_id}` | GET | Retrieve forensic dossier (key frames, Grad-CAM, reasons) |
+| `/api/alerts/search` | GET | Filter and search alerts by query, severity, or incident type |
+| `/api/alerts/{alert_id}/acknowledge` | POST | Mark incident alert as acknowledged and archive |
 | `/api/config` | GET / POST | Runtime detection thresholds & camera switching |
 | `/api/benchmarks` | GET | Thesis evaluation metrics for Experiments 1 through 5 |
 

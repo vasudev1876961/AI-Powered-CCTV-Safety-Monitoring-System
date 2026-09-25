@@ -49,10 +49,15 @@ class ObjectDetector:
 
             self.model = YOLO(target_path)
             self.device = "0" if torch.cuda.is_available() else "cpu"
-            print(f"[Detector] Successfully loaded YOLO model: {target_path} on {self.device}")
+            self.half_precision = torch.cuda.is_available()
+            # Warm up model to eliminate cold-start inference latency spike
+            dummy_frame = np.zeros((320, 320, 3), dtype=np.uint8)
+            self.model(dummy_frame, device=self.device, verbose=False, half=self.half_precision)
+            print(f"[Detector] Successfully loaded & warmed up YOLO model: {target_path} on {self.device} (FP16: {self.half_precision})")
         except Exception as e:
             print(f"[Detector] Notice: Running in standalone simulated mode ({e})")
             self.model = None
+            self.half_precision = False
 
     def detect(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """
@@ -68,14 +73,17 @@ class ObjectDetector:
 
         if self.model is not None:
             try:
-                results = self.model(
-                    frame,
-                    conf=self.conf_thresh,
-                    iou=self.iou_thresh,
-                    classes=self.target_classes,
-                    device=self.device,
-                    verbose=False,
-                )
+                import torch
+                with torch.inference_mode():
+                    results = self.model(
+                        frame,
+                        conf=self.conf_thresh,
+                        iou=self.iou_thresh,
+                        classes=self.target_classes,
+                        device=self.device,
+                        half=getattr(self, "half_precision", False),
+                        verbose=False,
+                    )
                 detections = []
                 for r in results:
                     boxes = r.boxes

@@ -111,12 +111,22 @@
           </div>
 
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <select id="selectGeofencePreset" style="background: rgba(15,23,42,0.85); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 5px 8px; border-radius: var(--radius-sm); font-size: 0.72rem; font-family: var(--font-mono); cursor: pointer;" title="Select preset restricted safety zone">
+              <option value="">Zone Presets...</option>
+              <option value="vault">Vault Perimeter</option>
+              <option value="forklift">Forklift Hazard Zone</option>
+              <option value="fire_exit">Fire Exit Corridor</option>
+            </select>
             <button class="cam-btn" id="btnDrawZone" title="Click to draw custom restricted geofence polygon on canvas">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 15.7V13h2v4l-9 4-7-4V7l7-4 3.3 1.9-1 1.7L7 5 3 7.3v8.4L9 19l8-3.3zM15 1v6h6V1h-6zm4 4h-2V3h2v2z"/></svg>
               <span>Draw Geofence</span>
             </button>
             <button class="cam-btn" id="btnClearZones" style="display: none; color: var(--accent-crimson);" title="Clear custom drawn zones">
               <span>Clear Zones</span>
+            </button>
+            <button class="cam-btn" id="btnSnapshot" title="Capture high-resolution forensic frame snapshot">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c1.65 0 3-1.35 3-3s-1.35-3-3-3-3 1.35-3 3 1.35 3 3 3zm0 2c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm9-9h-3.17L16 3H8L6.17 5H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 14H3V7h3.88l1.83-2h6.58l1.83 2H21v12z"/></svg>
+              <span>Snapshot</span>
             </button>
             <label class="cam-btn file-upload-label" title="Upload custom video to test">
               <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
@@ -193,6 +203,10 @@
               <label class="toggle-label">
                 <input type="checkbox" id="toggleGradCam">
                 <span>Grad-CAM Saliency</span>
+              </label>
+              <label class="toggle-label">
+                <input type="checkbox" id="toggleInspector" checked>
+                <span>Track Inspector</span>
               </label>
             </div>
 
@@ -293,7 +307,28 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-crimson);"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>
               Incident Activity Log
             </h3>
-            <button class="cam-btn" id="btnClearAlerts" style="padding: 2px 8px; font-size: 0.68rem;">Clear</button>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button class="cam-btn" id="btnExportAlertsCsv" style="padding: 2px 7px; font-size: 0.65rem;" title="Export incident history as CSV">CSV</button>
+              <button class="cam-btn" id="btnExportAlertsJson" style="padding: 2px 7px; font-size: 0.65rem;" title="Export incident history as JSON">JSON</button>
+              <button class="cam-btn" id="btnClearAlerts" style="padding: 2px 7px; font-size: 0.65rem;">Clear</button>
+            </div>
+          </div>
+
+          <!-- Incident Filter & Search Strip -->
+          <div class="incident-search-strip" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle);">
+            <div style="position: relative;">
+              <input type="text" id="inputAlertSearch" placeholder="Search incidents, tracks, reasons..." style="width: 100%; background: rgba(6,9,17,0.7); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 5px 10px 5px 28px; border-radius: var(--radius-sm); font-size: 0.72rem; font-family: var(--font-mono);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="position: absolute; left: 9px; top: 8px; color: var(--text-dim);"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 4px; flex-wrap: wrap;">
+              <div class="severity-filter-chips" style="display: flex; gap: 4px;">
+                <button class="filter-chip active" data-filter-sev="ALL">ALL</button>
+                <button class="filter-chip" data-filter-sev="CRITICAL" style="color: var(--accent-crimson);">CRIT</button>
+                <button class="filter-chip" data-filter-sev="HIGH" style="color: var(--accent-amber);">HIGH</button>
+                <button class="filter-chip" data-filter-sev="MED_LOW">MED/LOW</button>
+              </div>
+              <span id="alertCountBadge" style="font-size: 0.68rem; color: var(--text-dim); font-family: var(--font-mono);">0 logged</span>
+            </div>
           </div>
 
           <div class="alerts-scroll-container" id="alertsContainer">

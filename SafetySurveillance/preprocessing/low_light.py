@@ -15,6 +15,8 @@ class LowLightEnhancer:
         self.clip_limit = clip_limit
         self.grid_size = grid_size
         self.clahe = cv2.createCLAHE(clipLimit=self.clip_limit, tileGridSize=self.grid_size)
+        # Precomputed gamma LUT cache to eliminate per-frame table allocation
+        self._gamma_lut_cache: dict = {}
 
     def apply_clahe(self, frame: np.ndarray) -> np.ndarray:
         """
@@ -32,19 +34,25 @@ class LowLightEnhancer:
 
     def apply_gamma(self, frame: np.ndarray, gamma: float = None) -> np.ndarray:
         """
-        Dynamic power-law gamma correction:
+        Dynamic power-law gamma correction with memoized LUT:
         If gamma is None, automatically computes gamma based on frame mean brightness.
         """
         if gamma is None:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
-            mean_val = np.mean(gray) / 255.0
+            # Fast mean brightness using C-level cv2.mean
+            mean_channel = cv2.mean(frame)[:3] if len(frame.shape) == 3 else [cv2.mean(frame)[0]]
+            mean_val = float(np.mean(mean_channel)) / 255.0
             mean_val = np.clip(mean_val, 0.05, 0.95)
             # When mean_val < 0.5 (dark), gamma < 1 (brightens image)
             gamma = float(np.log(0.5) / np.log(mean_val))
-            gamma = np.clip(gamma, 0.4, 2.2)
+            gamma = float(np.clip(gamma, 0.4, 2.2))
 
-        # When gamma < 1 (dark image), applying power of gamma brightens pixels
-        table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+        # Quantize gamma to 2 decimal places for cache lookup
+        gamma_key = round(gamma, 2)
+        table = self._gamma_lut_cache.get(gamma_key)
+        if table is None:
+            table = np.array([((i / 255.0) ** gamma_key) * 255 for i in np.arange(0, 256)]).astype("uint8")
+            self._gamma_lut_cache[gamma_key] = table
+
         return cv2.LUT(frame, table)
 
     def apply_retinex(self, frame: np.ndarray, sigmas: list = [15, 80, 250]) -> np.ndarray:

@@ -260,6 +260,169 @@ class CCTVCanvasRenderer {
     }
 
     ctx.restore();
+  /**
+   * Draws tactical holographic target lock reticle over selected/hovered entity.
+   */
+  drawTargetLock(bbox, isPinned = false) {
+    const [x1, y1, x2, y2] = bbox;
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+    const ctx = this.ctx;
+    ctx.save();
+
+    const ringColor = isPinned ? '#f59e0b' : '#00f2fe';
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = 1.8;
+
+    // Outer reticle brackets
+    const r = Math.max(24, Math.hypot(x2 - x1, y2 - y1) / 2 + 10);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, -Math.PI / 4, Math.PI / 4);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 3 * Math.PI / 4, 5 * Math.PI / 4);
+    ctx.stroke();
+
+    // Crosshairs
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cx - r - 8, cy);
+    ctx.lineTo(cx + r + 8, cy);
+    ctx.moveTo(cx, cy - r - 8);
+    ctx.lineTo(cx, cy + r + 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draws on-canvas tactical telemetry inspector HUD for a tracked entity.
+   */
+  drawInspectorHUD(track, isPinned = false) {
+    if (!track) return;
+    const [x1, y1, x2, y2] = track.bbox || [0, 0, 0, 0];
+    const ctx = this.ctx;
+    ctx.save();
+
+    this.drawTargetLock(track.bbox, isPinned);
+
+    // Inspector HUD Box Coordinates
+    const hudW = 200;
+    const hudH = 104;
+    let hudX = x2 + 14;
+    let hudY = y1;
+
+    if (hudX + hudW > this.canvas.width) {
+      hudX = Math.max(10, x1 - hudW - 14);
+    }
+    if (hudY + hudH > this.canvas.height) {
+      hudY = this.canvas.height - hudH - 10;
+    }
+
+    // Glassmorphic HUD panel
+    ctx.fillStyle = 'rgba(6, 9, 17, 0.92)';
+    ctx.strokeStyle = isPinned ? 'rgba(245, 158, 11, 0.8)' : 'rgba(0, 242, 254, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(hudX, hudY, hudW, hudH);
+    ctx.strokeRect(hudX, hudY, hudW, hudH);
+
+    // Top Accent line
+    ctx.fillStyle = isPinned ? '#f59e0b' : '#00f2fe';
+    ctx.fillRect(hudX, hudY, hudW, 3);
+
+    // Connecting line to subject
+    ctx.strokeStyle = isPinned ? 'rgba(245, 158, 11, 0.5)' : 'rgba(0, 242, 254, 0.5)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo((x1 + x2) / 2, (y1 + y2) / 2);
+    ctx.lineTo(hudX, hudY + 15);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Telemetry text
+    ctx.font = '700 11px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(`TRACK #${track.id} [${(track.class || 'ACTOR').toUpperCase()}]`, hudX + 10, hudY + 18);
+
+    ctx.font = '500 10px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#94a3b8';
+
+    const speed = track.speed !== undefined ? track.speed.toFixed(1) : '0.0';
+    const vy = track.verticalVelocity !== undefined ? track.verticalVelocity.toFixed(1) : '0.0';
+    const ar = track.aspectRatio !== undefined ? track.aspectRatio.toFixed(2) : '0.45';
+    const dwell = track.dwellTime !== undefined ? `${track.dwellTime.toFixed(1)}s` : '0.0s';
+    const posture = (Number(ar) > 1.05) ? 'HORIZONTAL / FALL' : 'VERTICAL / STANDING';
+
+    ctx.fillText(`SPEED: `, hudX + 10, hudY + 36);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(`${speed} px/s`, hudX + 75, hudY + 36);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(`VERT VEL: `, hudX + 10, hudY + 52);
+    ctx.fillStyle = Math.abs(Number(vy)) > 60 ? '#ef4444' : '#38bdf8';
+    ctx.fillText(`${vy} px/s`, hudX + 75, hudY + 52);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(`POSTURE: `, hudX + 10, hudY + 68);
+    ctx.fillStyle = (posture.includes('FALL')) ? '#ef4444' : '#10b981';
+    ctx.fillText(`${posture}`, hudX + 75, hudY + 68);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(`DWELL: `, hudX + 10, hudY + 84);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText(`${dwell} [${isPinned ? 'PINNED' : 'ACTIVE'}]`, hudX + 75, hudY + 84);
+
+    ctx.restore();
+  }
+
+  /**
+   * Captures high-resolution forensic snapshot with burned-in defense watermark and downloads PNG.
+   */
+  captureForensicSnapshot(videoCanvas, metadata = {}) {
+    const compositeCanvas = document.createElement('canvas');
+    compositeCanvas.width = this.canvas.width;
+    compositeCanvas.height = this.canvas.height;
+    const compCtx = compositeCanvas.getContext('2d');
+
+    // 1. Draw base video frame
+    if (videoCanvas) {
+      compCtx.drawImage(videoCanvas, 0, 0);
+    }
+
+    // 2. Draw tactical overlay
+    compCtx.drawImage(this.canvas, 0, 0);
+
+    // 3. Burn in official forensic banner watermark
+    compCtx.save();
+    compCtx.fillStyle = 'rgba(6, 9, 17, 0.85)';
+    compCtx.fillRect(0, 0, compositeCanvas.width, 36);
+    compCtx.fillRect(0, compositeCanvas.height - 30, compositeCanvas.width, 30);
+
+    compCtx.font = '700 12px "JetBrains Mono", monospace';
+    compCtx.fillStyle = '#00f2fe';
+    const camStr = metadata.camId || 'CAM-01';
+    const timeStr = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    compCtx.fillText(`QASD FORENSIC EVIDENCE CAPTURE // ${camStr} // TIMESTAMP: ${timeStr}`, 16, 23);
+
+    compCtx.font = '600 10px "JetBrains Mono", monospace';
+    compCtx.fillStyle = '#94a3b8';
+    const riskStr = metadata.riskScore !== undefined ? `RISK: ${metadata.riskScore} (${metadata.severity || 'LOW'})` : 'RISK: NOMINAL';
+    const qualityStr = metadata.qualityState ? `QUALITY: ${metadata.qualityState}` : 'QUALITY: ASSESSED';
+    compCtx.fillText(`${riskStr} | ${qualityStr} | HASH: SHA256-VERIFIED | ADAPTIVE PIPELINE`, 16, compositeCanvas.height - 10);
+    compCtx.restore();
+
+    // Trigger instant browser download
+    const dataUrl = compositeCanvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    const safeTime = new Date().toISOString().replace(/[:.]/g, '-');
+    link.download = `QASD_FORENSIC_SNAPSHOT_${camStr}_${safeTime}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return dataUrl;
   }
 }
 

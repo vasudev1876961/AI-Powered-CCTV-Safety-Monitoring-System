@@ -14,10 +14,11 @@ import base64
 import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,21 +44,6 @@ from SafetySurveillance.explainability.evidence import EvidenceRecorder
 from SafetySurveillance.explainability.gradcam import SaliencyExplainer
 from SafetySurveillance.alerts.alert_manager import SafetyAlertManager
 from SafetySurveillance.evaluation.benchmarks import ResearchBenchmarkSuite
-
-app = FastAPI(
-    title="QASD Surveillance AI Engine",
-    version="2.0.0",
-    description="Quality-Aware Deep Learning Framework for CCTV Safety Monitoring"
-)
-
-# Enable CORS for flexible dashboard access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # -----------------------------------------------------------------------------
 # Pipeline State & Engine Manager
@@ -97,6 +83,29 @@ class SurveillancePipelineEngine:
         self.active_incident_trigger: Optional[str] = None
         self.trigger_frames_remaining = 0
 
+        self.start_time = time.time()
+        self.processed_frames_count = 0
+        self.latest_tactical_frame: Optional[np.ndarray] = None
+        self.latest_encoded_jpeg: Optional[bytes] = None
+        self.latest_telemetry: Optional[Dict[str, Any]] = None
+        self.preset_geofences: List[Dict[str, Any]] = [
+            {
+                "name": "Restricted Vault Perimeter",
+                "polygon": [[120, 100], [540, 100], [580, 420], [80, 420]],
+                "description": "High-security vault perimeter corridor"
+            },
+            {
+                "name": "Forklift Active Hazard Zone",
+                "polygon": [[200, 150], [500, 150], [520, 380], [180, 380]],
+                "description": "Heavy machinery and forklift transit zone"
+            },
+            {
+                "name": "Emergency Fire Exit Corridor",
+                "polygon": [[50, 80], [300, 80], [300, 480], [50, 480]],
+                "description": "Must remain unblocked and free from loitering"
+            }
+        ]
+
         # Custom Degradation Overrides
         self.degradation_overrides = {
             "darkness": 1.0,
@@ -104,6 +113,44 @@ class SurveillancePipelineEngine:
             "blur": 0,
             "downsample": 720,
         }
+
+    def render_tactical_frame(self, frame: np.ndarray, telemetry: Dict[str, Any]) -> np.ndarray:
+        """Renders tactical bounding boxes, ID labels, quality badges, and restricted zones."""
+        vis = self.last_enhanced_frame.copy() if self.last_enhanced_frame is not None else frame.copy()
+        cam_id = telemetry.get("camera_id", self.current_camera)
+
+        # Restricted geofences
+        for zone in self.intrusion_detector.restricted_zones:
+            poly = zone.get("polygon", [])
+            if len(poly) >= 3:
+                pts = np.array(poly, np.int32).reshape((-1, 1, 2))
+                cv2.polylines(vis, [pts], isClosed=True, color=(0, 165, 255), thickness=2)
+                cv2.putText(vis, zone.get("name", "ZONE"), (poly[0][0], max(20, poly[0][1] - 6)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 165, 255), 1)
+
+        # Tactical detection boxes
+        for det in telemetry.get("detections", []):
+            x1, y1, x2, y2 = det["bbox"]
+            cls_name = det["class"].upper()
+            conf = det["conf"]
+            is_crit = telemetry.get("severity") in ["CRITICAL", "HIGH"]
+            box_color = (0, 70, 255) if is_crit else (254, 242, 0)
+            cv2.rectangle(vis, (x1, y1), (x2, y2), box_color, 2)
+            cv2.putText(vis, f"ID#{det['id']} {cls_name} {conf:.2f}",
+                        (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.52, box_color, 2)
+
+        # Tactical OSD headers
+        fps_val = telemetry.get("fps", 25.0)
+        q_state = telemetry.get("quality", {}).get("quality_state", "GOOD")
+        risk_score = telemetry.get("risk_score", 0.1)
+        severity = telemetry.get("severity", "LOW")
+
+        cv2.putText(vis, f"QASD LIVE STREAM // {cam_id} // FPS: {fps_val}",
+                    (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 255, 180), 2)
+        cv2.putText(vis, f"QUALITY: {q_state} | RISK: {risk_score} ({severity})",
+                    (15, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1)
+
+        return vis
 
     def set_camera(self, cam_id: str):
         self.current_camera = cam_id
@@ -419,7 +466,7 @@ ws_manager = ConnectionManager()
 # Background Asynchronous Video Streaming Task
 # -----------------------------------------------------------------------------
 async def surveillance_streaming_worker():
-    """Continuously runs the QASD pipeline and pushes telemetry to connected WebSockets."""
+    """Continuously runs the QASD pipeline, renders tactical overlays, and pushes telemetry."""
     target_fps = 25.0
     frame_interval = 1.0 / target_fps
     prev_time = time.time()
@@ -443,7 +490,16 @@ async def surveillance_streaming_worker():
                 telemetry["fps"] = round(fps_smooth, 1)
                 telemetry["type"] = "pipeline_telemetry"
 
-                # 3. Broadcast to all active browser consoles
+                # 3. Render tactical frame and pre-encode JPEG once for all clients
+                vis = engine.render_tactical_frame(frame, telemetry)
+                ret, buffer = cv2.imencode('.jpg', vis, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                if ret:
+                    engine.latest_encoded_jpeg = buffer.tobytes()
+                engine.latest_tactical_frame = vis
+                engine.latest_telemetry = telemetry
+                engine.processed_frames_count += 1
+
+                # 4. Broadcast to all active browser consoles
                 await ws_manager.broadcast_json(telemetry)
 
             except Exception as e:
@@ -455,10 +511,32 @@ async def surveillance_streaming_worker():
         await asyncio.sleep(sleep_time)
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern FastAPI application lifespan context replacing deprecated on_event."""
     print("[Server] Initializing background QASD surveillance streaming worker...")
-    asyncio.create_task(surveillance_streaming_worker())
+    worker_task = asyncio.create_task(surveillance_streaming_worker())
+    yield
+    print("[Server] Terminating background streaming worker...")
+    worker_task.cancel()
+
+
+# Instantiate FastAPI app with modern lifespan management
+app = FastAPI(
+    title="QASD Surveillance AI Engine",
+    version="2.0.0",
+    description="Quality-Aware Deep Learning Framework for CCTV Safety Monitoring",
+    lifespan=lifespan
+)
+
+# Enable CORS for flexible dashboard access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # -----------------------------------------------------------------------------
@@ -698,40 +776,149 @@ async def get_evidence_dossier(alert_id: str):
 @app.get("/api/stream/{cam_id}")
 async def video_mjpeg_stream(cam_id: str = "CAM_01"):
     """
-    Real-Time MJPEG Streaming Endpoint with tactical OSD overlay.
-    Usable in any browser `<img src="/api/stream/CAM_01">` or external CCTV monitor.
+    Real-Time High-Throughput MJPEG Streaming Endpoint with tactical OSD overlay.
+    Leverages background worker frame cache to support multi-client streaming with zero extra inference cost.
     """
     async def frame_generator():
         while True:
-            frame = engine.generate_camera_frame(cam_id)
-            telemetry = engine.process_frame(frame)
-            vis = engine.last_enhanced_frame.copy() if engine.last_enhanced_frame is not None else frame.copy()
+            if cam_id == engine.current_camera and engine.latest_encoded_jpeg is not None:
+                frame_bytes = engine.latest_encoded_jpeg
+            else:
+                # Secondary camera stream generated on-demand
+                frame = engine.generate_camera_frame(cam_id)
+                q_metrics = engine.quality_estimator.assess_frame(frame)
+                telemetry = {
+                    "camera_id": cam_id,
+                    "quality": q_metrics,
+                    "risk_score": 0.1,
+                    "severity": "LOW",
+                    "detections": [],
+                    "fps": 25.0
+                }
+                vis = engine.render_tactical_frame(frame, telemetry)
+                ret, buffer = cv2.imencode('.jpg', vis, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                frame_bytes = buffer.tobytes() if ret else b""
 
-            # Burn in tactical bounding boxes & labels
-            for det in telemetry.get("detections", []):
-                x1, y1, x2, y2 = det["bbox"]
-                cls_name = det["class"].upper()
-                conf = det["conf"]
-                is_crit = telemetry.get("severity") in ["CRITICAL", "HIGH"]
-                box_color = (0, 70, 255) if is_crit else (254, 242, 0)
-                cv2.rectangle(vis, (x1, y1), (x2, y2), box_color, 2)
-                cv2.putText(vis, f"ID#{det['id']} {cls_name} {conf:.2f}",
-                            (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.52, box_color, 2)
-
-            # Burn in OSD header
-            cv2.putText(vis, f"QASD LIVE STREAM // {cam_id} // FPS: {telemetry.get('fps', 25.0)}",
-                        (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, (0, 255, 180), 2)
-            cv2.putText(vis, f"QUALITY: {telemetry['quality']['quality_state']} | RISK: {telemetry['risk_score']} ({telemetry['severity']})",
-                        (15, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (255, 255, 255), 1)
-
-            ret, buffer = cv2.imencode('.jpg', vis, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-            if ret:
-                frame_bytes = buffer.tobytes()
+            if frame_bytes:
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             await asyncio.sleep(0.04)
 
     return StreamingResponse(frame_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/api/snapshot/{cam_id}")
+async def capture_snapshot(cam_id: str = "CAM_01"):
+    """Captures and returns high-resolution forensic frame snapshot with burned-in OSD watermark."""
+    if cam_id == engine.current_camera and engine.latest_tactical_frame is not None:
+        vis = engine.latest_tactical_frame.copy()
+    else:
+        frame = engine.generate_camera_frame(cam_id)
+        telemetry = engine.process_frame(frame)
+        vis = engine.render_tactical_frame(frame, telemetry)
+
+    # Burn in official forensic timestamp watermark
+    timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    cv2.putText(vis, f"FORENSIC EVIDENCE CAPTURE // {timestamp_str}",
+                (15, vis.shape[0] - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 242, 254), 1)
+
+    ret, buffer = cv2.imencode('.jpg', vis, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+    if not ret:
+        return JSONResponse({"error": "Failed to encode snapshot"}, status_code=500)
+
+    return Response(
+        content=buffer.tobytes(),
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f"inline; filename=snapshot_{cam_id}_{int(time.time())}.jpg"}
+    )
+
+
+@app.post("/api/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(alert_id: str):
+    """Marks an active incident alert as acknowledged / archived by the operator."""
+    found = False
+    for alert in engine.alert_manager.alert_history:
+        if alert.get("id") == alert_id:
+            alert["acknowledged"] = True
+            alert["acknowledged_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            found = True
+            break
+    if alert_id in engine.evidence_store:
+        engine.evidence_store[alert_id]["acknowledged"] = True
+
+    if not found:
+        return JSONResponse({"error": "Alert ID not found"}, status_code=404)
+    return {"status": "acknowledged", "alert_id": alert_id}
+
+
+@app.get("/api/alerts/search")
+async def search_alerts(
+    query: Optional[str] = None,
+    severity: Optional[str] = None,
+    incident_type: Optional[str] = None,
+    limit: int = 50
+):
+    """Searches and filters stored alert history."""
+    results = []
+    for a in engine.alert_manager.alert_history:
+        if severity and a.get("severity", "").upper() != severity.upper():
+            continue
+        if incident_type and incident_type.lower() not in a.get("incident_type", "").lower():
+            continue
+        if query:
+            q = query.lower()
+            text_haystack = f"{a.get('incident_type', '')} {a.get('camera_id', '')} {' '.join(a.get('reasons', []))}".lower()
+            if q not in text_haystack:
+                continue
+        results.append(a)
+        if len(results) >= limit:
+            break
+    return results
+
+
+@app.get("/api/metrics/summary")
+async def get_metrics_summary():
+    """Returns high-level surveillance operations analytics."""
+    uptime = time.time() - getattr(engine, "start_time", engine.last_process_time)
+    alerts = engine.alert_manager.alert_history
+    sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    type_counts: Dict[str, int] = {}
+
+    for a in alerts:
+        s = a.get("severity", "LOW")
+        sev_counts[s] = sev_counts.get(s, 0) + 1
+        t = a.get("incident_type", "Unknown")
+        type_counts[t] = type_counts.get(t, 0) + 1
+
+    return {
+        "uptime_seconds": round(uptime, 1),
+        "total_frames_processed": getattr(engine, "processed_frames_count", engine.frame_index),
+        "active_camera": engine.current_camera,
+        "total_alerts": len(alerts),
+        "severity_distribution": sev_counts,
+        "incident_types_distribution": type_counts,
+        "active_tracks_count": len(engine.tracker.tracks),
+        "evidence_dossiers_count": len(engine.evidence_store),
+    }
+
+
+@app.get("/api/presets/geofences")
+async def get_preset_geofences():
+    """Returns available security geofence templates."""
+    return engine.preset_geofences
+
+
+@app.post("/api/presets/geofences")
+async def add_preset_geofence(payload: Dict[str, Any]):
+    """Adds a new named geofence preset."""
+    if "name" not in payload or "polygon" not in payload:
+        return JSONResponse({"error": "Missing name or polygon"}, status_code=400)
+    engine.preset_geofences.append({
+        "name": payload["name"],
+        "polygon": payload["polygon"],
+        "description": payload.get("description", "Custom security zone")
+    })
+    return {"status": "created", "preset": payload}
 
 
 # -----------------------------------------------------------------------------

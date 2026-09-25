@@ -70,6 +70,62 @@ class TestServerAPI(unittest.TestCase):
         self.assertIn("risk_score", data)
         self.assertIn("severity", data)
 
+    def test_snapshot_capture_endpoint(self):
+        resp = self.client.get("/api/snapshot/CAM_01")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers["content-type"], "image/jpeg")
+        self.assertGreater(len(resp.content), 500)
+
+    def test_metrics_summary_endpoint(self):
+        resp = self.client.get("/api/metrics/summary")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("uptime_seconds", data)
+        self.assertIn("total_frames_processed", data)
+        self.assertIn("severity_distribution", data)
+
+    def test_preset_geofences_endpoints(self):
+        # GET presets
+        resp = self.client.get("/api/presets/geofences")
+        self.assertEqual(resp.status_code, 200)
+        presets = resp.json()
+        self.assertIsInstance(presets, list)
+        self.assertGreaterEqual(len(presets), 1)
+
+        # POST new preset
+        new_preset = {
+            "name": "Chemical Storage Hazard",
+            "polygon": [[50, 50], [250, 50], [250, 250], [50, 250]],
+            "description": "Hazardous materials isolation zone"
+        }
+        resp_post = self.client.post("/api/presets/geofences", json=new_preset)
+        self.assertEqual(resp_post.status_code, 200)
+        self.assertEqual(resp_post.json()["status"], "created")
+
+    def test_alert_acknowledge_and_search(self):
+        # Inject sample alert into alert manager
+        alert_candidate = {
+            "incident_type": "Fall / Collapse",
+            "confidence": 0.92,
+            "track_id": 999,
+            "bbox": [100, 100, 200, 150],
+            "reasons": ["Rapid vertical collapse"]
+        }
+        created = engine.alert_manager.process_alert("CAM_01", alert_candidate, quality_factor=0.9)
+        self.assertIsNotNone(created)
+        alert_id = created["id"]
+
+        # Search alert
+        resp_search = self.client.get("/api/alerts/search?incident_type=Fall")
+        self.assertEqual(resp_search.status_code, 200)
+        results = resp_search.json()
+        self.assertTrue(any(a["id"] == alert_id for a in results))
+
+        # Acknowledge alert
+        resp_ack = self.client.post(f"/api/alerts/{alert_id}/acknowledge")
+        self.assertEqual(resp_ack.status_code, 200)
+        self.assertEqual(resp_ack.json()["status"], "acknowledged")
+
 
 if __name__ == "__main__":
     unittest.main()

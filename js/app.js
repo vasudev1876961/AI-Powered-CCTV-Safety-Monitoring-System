@@ -301,10 +301,123 @@ document.addEventListener('DOMContentLoaded', () => {
   btnClearZones.addEventListener('click', () => {
     simulator.clearCustomZones();
     btnClearZones.style.display = 'none';
+    const presetSelect = document.getElementById('selectGeofencePreset');
+    if (presetSelect) presetSelect.value = '';
     sendWsMessage({
       action: 'update_geofence',
       zones: simulator.getZones()
     });
+  });
+
+  // Preset Geofence Selector
+  const selectGeofencePreset = document.getElementById('selectGeofencePreset');
+  if (selectGeofencePreset) {
+    selectGeofencePreset.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (!val) return;
+      let poly = null;
+      let name = '';
+      if (val === 'vault') {
+        poly = [[120, 100], [540, 100], [580, 420], [80, 420]];
+        name = 'Restricted Vault Perimeter';
+      } else if (val === 'forklift') {
+        poly = [[200, 150], [500, 150], [520, 380], [180, 380]];
+        name = 'Forklift Active Hazard Zone';
+      } else if (val === 'fire_exit') {
+        poly = [[50, 80], [300, 80], [300, 480], [50, 480]];
+        name = 'Emergency Fire Exit Corridor';
+      }
+
+      if (poly) {
+        simulator.customZones = [{ name, polygon: poly }];
+        btnClearZones.style.display = 'inline-flex';
+        sendWsMessage({
+          action: 'update_geofence',
+          zones: simulator.getZones()
+        });
+        xaiManager.showToast({
+          incidentType: `Preset Loaded: ${name}`,
+          severity: 'LOW',
+          reasons: ['Restricted safety perimeter loaded and armed from system presets.']
+        });
+      }
+    });
+  }
+
+  // Forensic Frame Snapshot Exporter
+  const btnSnapshot = document.getElementById('btnSnapshot');
+  if (btnSnapshot) {
+    btnSnapshot.addEventListener('click', () => {
+      const riskVal = document.getElementById('riskScoreVal').textContent || '0.15';
+      const sevBadge = document.getElementById('riskSeverityBadge').textContent || 'LOW';
+      const qVal = document.getElementById('topQualityVal').textContent || 'GOOD';
+      renderer.captureForensicSnapshot(videoCanvas, {
+        camId: simulator.currentCam,
+        riskScore: riskVal,
+        severity: sevBadge,
+        qualityState: qVal
+      });
+      xaiManager.showToast({
+        incidentType: 'Forensic Snapshot Captured',
+        severity: 'LOW',
+        reasons: [`Watermarked tactical evidence snapshot saved for ${simulator.currentCam}.`]
+      });
+    });
+  }
+
+  // Active Track Inspector State & Event Listeners
+  let currentDetections = [];
+  let hoveredTrack = null;
+  let pinnedTrackId = null;
+  const toggleInspector = document.getElementById('toggleInspector');
+
+  overlayCanvas.addEventListener('mousemove', (e) => {
+    if (isDrawingGeofence) return;
+    if (!toggleInspector || !toggleInspector.checked) {
+      hoveredTrack = null;
+      return;
+    }
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    let found = null;
+    for (const det of currentDetections) {
+      const [x1, y1, x2, y2] = det.bbox;
+      if (mx >= x1 && mx <= x2 && my >= y1 && my <= y2) {
+        found = { ...det };
+        break;
+      }
+    }
+
+    if (found) {
+      // Enrich with kinematics from TrackHistory
+      const hist = incidentEngine.trackHistories.get(found.id);
+      if (hist) {
+        const vel = hist.velocities.length > 0 ? hist.velocities[hist.velocities.length - 1] : [0, 0];
+        found.speed = Math.hypot(vel[0], vel[1]);
+        found.verticalVelocity = vel[1];
+        const w_box = found.bbox[2] - found.bbox[0];
+        const h_box = found.bbox[3] - found.bbox[1];
+        found.aspectRatio = w_box / Math.max(1, h_box);
+        found.dwellTime = hist.getDwellTime();
+      }
+      hoveredTrack = found;
+    } else {
+      hoveredTrack = null;
+    }
+  });
+
+  overlayCanvas.addEventListener('click', (e) => {
+    if (isDrawingGeofence) return;
+    if (simulator.currentCam === 'QUAD') return;
+    if (hoveredTrack) {
+      pinnedTrackId = (pinnedTrackId === hoveredTrack.id) ? null : hoveredTrack.id;
+    } else {
+      pinnedTrackId = null;
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -653,6 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
       simulator.drawEnvironment(videoCtx, w, h);
       activeDetections = simulator.updateAndDrawActors(videoCtx, w, h);
     }
+    currentDetections = activeDetections;
 
     // Apply baseline camera degradations if in degraded camera (e.g. CAM_02 Dark Stairwell)
     if (simulator.currentCam === 'CAM_02') {
@@ -782,6 +896,32 @@ document.addEventListener('DOMContentLoaded', () => {
       renderer.drawGradCamOverlay(heatPoints);
     }
 
+    // 7. Active Track Inspector Holographic HUD
+    if (toggleInspector && toggleInspector.checked) {
+      let targetTrack = null;
+      if (pinnedTrackId) {
+        targetTrack = activeDetections.find(d => d.id === pinnedTrackId);
+        if (targetTrack) {
+          const hist = incidentEngine.trackHistories.get(targetTrack.id);
+          if (hist) {
+            const vel = hist.velocities.length > 0 ? hist.velocities[hist.velocities.length - 1] : [0, 0];
+            targetTrack.speed = Math.hypot(vel[0], vel[1]);
+            targetTrack.verticalVelocity = vel[1];
+            const w_box = targetTrack.bbox[2] - targetTrack.bbox[0];
+            const h_box = targetTrack.bbox[3] - targetTrack.bbox[1];
+            targetTrack.aspectRatio = w_box / Math.max(1, h_box);
+            targetTrack.dwellTime = hist.getDwellTime();
+          }
+        }
+      }
+      if (!targetTrack && hoveredTrack) {
+        targetTrack = hoveredTrack;
+      }
+      if (targetTrack) {
+        renderer.drawInspectorHUD(targetTrack, pinnedTrackId === targetTrack.id);
+      }
+    }
+
     // Live Clock OSD
     document.getElementById('osdCamClock').textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
   }
@@ -899,7 +1039,129 @@ document.addEventListener('DOMContentLoaded', () => {
     qualityCtx.stroke();
   }
 
+  const allLoggedAlerts = [];
+  let currentSeverityFilter = 'ALL';
+  let currentSearchQuery = '';
+
+  const inputAlertSearch = document.getElementById('inputAlertSearch');
+  if (inputAlertSearch) {
+    inputAlertSearch.addEventListener('input', (e) => {
+      currentSearchQuery = e.target.value.toLowerCase().trim();
+      applyAlertFilters();
+    });
+  }
+
+  const filterChips = document.querySelectorAll('.filter-chip[data-filter-sev]');
+  filterChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      filterChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentSeverityFilter = chip.getAttribute('data-filter-sev');
+      applyAlertFilters();
+    });
+  });
+
+  function applyAlertFilters() {
+    const cards = document.querySelectorAll('.alert-item-card');
+    let visibleCount = 0;
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      const isCrit = card.classList.contains('critical');
+      const isHigh = card.classList.contains('high');
+      const isMedLow = !isCrit && !isHigh;
+
+      let matchesSev = true;
+      if (currentSeverityFilter === 'CRITICAL') matchesSev = isCrit;
+      else if (currentSeverityFilter === 'HIGH') matchesSev = isHigh;
+      else if (currentSeverityFilter === 'MED_LOW') matchesSev = isMedLow;
+
+      const matchesText = !currentSearchQuery || text.includes(currentSearchQuery);
+
+      if (matchesSev && matchesText) {
+        card.classList.remove('incident-card-hidden');
+        visibleCount++;
+      } else {
+        card.classList.add('incident-card-hidden');
+      }
+    });
+
+    const badge = document.getElementById('alertCountBadge');
+    if (badge) badge.textContent = `${visibleCount} shown`;
+  }
+
+  const btnExportAlertsCsv = document.getElementById('btnExportAlertsCsv');
+  if (btnExportAlertsCsv) {
+    btnExportAlertsCsv.addEventListener('click', () => {
+      if (allLoggedAlerts.length === 0) {
+        xaiManager.showToast({
+          incidentType: 'Notice',
+          severity: 'LOW',
+          reasons: ['No logged incidents available to export yet.']
+        });
+        return;
+      }
+      let csv = 'ID,Timestamp,Camera,IncidentType,Severity,RiskScore,Reasons\n';
+      allLoggedAlerts.forEach(a => {
+        const id = a.id || 'ALT';
+        const ts = a.timestamp || '';
+        const cam = a.cameraId || '';
+        const type = `"${(a.incidentType || '').replace(/"/g, '""')}"`;
+        const sev = a.severity || '';
+        const risk = a.riskScore || 0;
+        const reasons = `"${(a.reasons ? a.reasons.join('; ') : '').replace(/"/g, '""')}"`;
+        csv += `${id},${ts},${cam},${type},${sev},${risk},${reasons}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QASD_INCIDENTS_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+    });
+  }
+
+  const btnExportAlertsJson = document.getElementById('btnExportAlertsJson');
+  if (btnExportAlertsJson) {
+    btnExportAlertsJson.addEventListener('click', () => {
+      if (allLoggedAlerts.length === 0) {
+        xaiManager.showToast({
+          incidentType: 'Notice',
+          severity: 'LOW',
+          reasons: ['No logged incidents available to export yet.']
+        });
+        return;
+      }
+      const blob = new Blob([JSON.stringify(allLoggedAlerts, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QASD_INCIDENTS_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+    });
+  }
+
+  // Evidence Modal Acknowledgment Handler with API sync
+  const btnAckIncident = document.getElementById('btnAckIncident');
+  if (btnAckIncident) {
+    btnAckIncident.addEventListener('click', async () => {
+      if (xaiManager.currentAlert && xaiManager.currentAlert.id) {
+        try {
+          await fetch(`/api/alerts/${xaiManager.currentAlert.id}/acknowledge`, { method: 'POST' });
+        } catch (e) {}
+      }
+      xaiManager.closeEvidenceModal();
+      xaiManager.showToast({
+        incidentType: 'Incident Acknowledged',
+        severity: 'LOW',
+        reasons: ['Incident acknowledged, archived, and synced with surveillance backend.']
+      });
+    });
+  }
+
   function addAlertToSidebar(alert) {
+    allLoggedAlerts.unshift(alert);
+    if (allLoggedAlerts.length > 100) allLoggedAlerts.pop();
+
     const placeholder = document.getElementById('emptyAlertsPlaceholder');
     if (placeholder) placeholder.remove();
 
@@ -930,9 +1192,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     container.insertBefore(card, container.firstChild);
 
-    if (container.children.length > 25) {
+    if (container.children.length > 50) {
       container.removeChild(container.lastChild);
     }
+
+    applyAlertFilters();
   }
 
   function renderSandboxCanvases(sourceCanvas, settings, baseQuality) {
