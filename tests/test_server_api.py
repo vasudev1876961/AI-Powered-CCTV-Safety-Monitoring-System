@@ -141,6 +141,16 @@ class TestServerAPI(unittest.TestCase):
         self.assertIn("models", data)
         self.assertIn("hardware", data)
 
+    def test_analyze_video_endpoint_validation(self):
+        # Test multipart file upload handling with dummy content
+        resp = self.client.post(
+            "/api/analyze_video",
+            files={"file": ("dummy.mp4", b"\x00\x00\x00\x18ftypmp42", "video/mp4")}
+        )
+        # Invalid video header returns 400 Bad Request
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.json())
+
 
 if __name__ == "__main__":
     unittest.main()

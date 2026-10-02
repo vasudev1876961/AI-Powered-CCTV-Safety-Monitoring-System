@@ -52,7 +52,10 @@ class ObjectDetector:
             self.half_precision = torch.cuda.is_available()
             # Warm up model to eliminate cold-start inference latency spike
             dummy_frame = np.zeros((320, 320, 3), dtype=np.uint8)
-            self.model(dummy_frame, device=self.device, verbose=False, half=self.half_precision)
+            warmup_kwargs = {"device": self.device, "verbose": False}
+            if self.half_precision:
+                warmup_kwargs["half"] = True
+            self.model(dummy_frame, **warmup_kwargs)
             print(f"[Detector] Successfully loaded & warmed up YOLO model: {target_path} on {self.device} (FP16: {self.half_precision})")
         except Exception as e:
             print(f"[Detector] Notice: Running in standalone simulated mode ({e})")
@@ -74,16 +77,17 @@ class ObjectDetector:
         if self.model is not None:
             try:
                 import torch
+                infer_kwargs = {
+                    "conf": self.conf_thresh,
+                    "iou": self.iou_thresh,
+                    "classes": self.target_classes,
+                    "device": self.device,
+                    "verbose": False,
+                }
+                if getattr(self, "half_precision", False):
+                    infer_kwargs["half"] = True
                 with torch.inference_mode():
-                    results = self.model(
-                        frame,
-                        conf=self.conf_thresh,
-                        iou=self.iou_thresh,
-                        classes=self.target_classes,
-                        device=self.device,
-                        half=getattr(self, "half_precision", False),
-                        verbose=False,
-                    )
+                    results = self.model(frame, **infer_kwargs)
                 detections = []
                 for r in results:
                     boxes = r.boxes
