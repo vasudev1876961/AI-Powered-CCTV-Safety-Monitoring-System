@@ -195,23 +195,29 @@ Empirical evaluation across the five experimental configurations described in Se
 
 ## 6. How to Run
 
-### Option A: Launching the Web Surveillance Console (Zero Setup)
-You can immediately view and interact with the full system in any web browser:
-```bash
-# Start a simple local server
-python -m http.server 8000
-```
-Open **`http://localhost:8000`** in your browser.
-
-### Option B: Running the Python Backend Server
+### Option A: Launching the Full-Stack AI Backend & Dashboard (Recommended)
+You can launch the complete FastAPI streaming server, neural network models, and the web console with one command:
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Run the FastAPI WebSocket streaming server
-python SafetySurveillance/server.py
+# 2. Run the full-stack engine
+python run_backend.py
 ```
-Visit `http://localhost:8000` to connect the frontend directly to the live Python WebSocket stream at `ws://localhost:8000/ws/detections`.
+*(On Windows, you can simply double-click `run_backend.bat`!)*
+
+Once running, access:
+- **Operations Dashboard**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger REST Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **WebSocket Streaming Gateway**: `ws://localhost:8000/ws/detections`
+- **Live MJPEG Tactical Stream**: [http://localhost:8000/api/stream/CAM_01](http://localhost:8000/api/stream/CAM_01)
+
+### Option B: Quick Client-Only Simulation (Zero Python Dependencies)
+You can also run the client simulation standalone in any web browser:
+```bash
+python -m http.server 8000
+```
+Open **`http://localhost:8000`** in your browser.
 
 ### Option C: Standalone OpenCV Window Demo
 ```bash
@@ -227,31 +233,46 @@ python SafetySurveillance/scripts/evaluate.py
 ```
 Outputs formatted ASCII comparison tables and updates `benchmark_results.json`.
 
-### Option E: Running Automated Unit & Integration Tests
+### Option E: Running Automated Test Suites
 ```bash
-# Execute all 32 automated test suites across preprocessing, tracking, incidents, and APIs
+# Execute all 34 automated unit and integration tests
 pytest -v
 ```
 
 ---
 
-## 7. REST & WebSocket API Reference
+## 7. Dashboard Architecture & 5 Command Tabs
+
+The web operations console features an Obsidian Cyber-Command design system tailored for mission-critical surveillance:
+
+1. **📡 Live Surveillance Console**: Multi-channel feeds (CAM-01 to CAM-04, 2x2 Quad Matrix), live stream switcher (`📡 AI Stream` vs `⚡ Client Sim`), interactive polygonal geofencing, real-time multi-factor risk gauge, and quick incident trigger simulations.
+2. **⚙️ AI Backend & Microservices Hub**: Distributed pipeline architecture flow visualizer, microservices health telemetry (FastAPI, YOLOv8, ByteTrack, Threat Core), interactive REST API playground, live hyperparameter threshold tuner, and a real-time scrolling terminal log stream.
+3. **🔬 Degradation & Restoration Lab**: Interactive before/after split evaluation of poor CCTV feeds with real-time controls for illumination (lux), sensor noise (dB), blur (px), downsampling, atmospheric haze, and compression.
+4. **📁 Forensics & Evidence Vault**: Searchable incident archive, full explainable AI (XAI) dossiers with keyframe replay scrubber, Grad-CAM saliency attention maps, kinematic velocity profiles, and formal certificate printing.
+5. **📊 Research Benchmark Lab**: Empirical validation graphs, mAP@50 curves, ROC-AUC distributions, latency breakdowns, and CSV export.
+
+---
+
+## 8. REST & WebSocket API Reference
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `/ws/detections` | WebSocket | Real-time bi-directional pipeline telemetry & control |
-| `/api/stream/{cam_id}` | GET | Live MJPEG video stream with burned-in HUD telemetry (zero-cost cached broadcast) |
-| `/api/snapshot/{cam_id}` | GET | Capture high-resolution forensic snapshot with official watermarked header |
+| `/api/stream/{cam_id}` | GET | Live MJPEG video stream with burned-in HUD telemetry (zero-cost broadcast) |
+| `/api/snapshot/{cam_id}` | GET | Capture high-resolution forensic snapshot with watermarked metadata |
 | `/api/analyze_video` | POST | Deep forensic audit on uploaded MP4/AVI CCTV video files |
-| `/api/health` | GET | System uptime, loaded model, device, and active camera state |
-| `/api/system_info` | GET | Complete pipeline topology, detector classes, and geofences |
+| `/api/health` | GET | System uptime, loaded model, device, active camera, and WS client count |
+| `/api/models/info` | GET | Deep neural network inspection (YOLOv8, tracker, risk core, device) |
+| `/api/logs` | GET | Operational server event logs with level filtering (ALL, INFO, ALERT, CRITICAL) |
+| `/api/logs/clear` | POST | Reset in-memory server log buffer |
+| `/api/system_info` | GET | Complete pipeline topology, detector classes, and active geofences |
 | `/api/metrics/summary` | GET | Operations analytics (uptime, frames processed, severity breakdown) |
-| `/api/presets/geofences` | GET / POST | Retrieve and save named restricted security zone presets |
+| `/api/presets/geofences` | GET / POST | Retrieve and register named restricted security zone presets |
 | `/api/evidence` | GET | List all stored forensic evidence dossiers |
 | `/api/evidence/{alert_id}` | GET | Retrieve forensic dossier (key frames, Grad-CAM, reasons) |
 | `/api/alerts/search` | GET | Filter and search alerts by query, severity, or incident type |
 | `/api/alerts/{alert_id}/acknowledge` | POST | Mark incident alert as acknowledged and archive |
-| `/api/config` | GET / POST | Runtime detection thresholds & camera switching |
+| `/api/config` | GET / POST | Runtime detection thresholds, enhancement routing & camera switching |
 | `/api/benchmarks` | GET | Thesis evaluation metrics for Experiments 1 through 5 |
 
 ---

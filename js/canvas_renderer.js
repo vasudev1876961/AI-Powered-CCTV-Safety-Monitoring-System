@@ -260,6 +260,8 @@ class CCTVCanvasRenderer {
     }
 
     ctx.restore();
+  }
+
   /**
    * Draws tactical holographic target lock reticle over selected/hovered entity.
    */

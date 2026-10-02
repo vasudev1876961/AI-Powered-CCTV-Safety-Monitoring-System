@@ -126,6 +126,21 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(resp_ack.status_code, 200)
         self.assertEqual(resp_ack.json()["status"], "acknowledged")
 
+    def test_logs_endpoint(self):
+        resp = self.client.get("/api/logs")
+        self.assertEqual(resp.status_code, 200)
+        logs = resp.json()
+        self.assertIsInstance(logs, list)
+        self.assertGreaterEqual(len(logs), 1)
+
+    def test_models_info_endpoint(self):
+        resp = self.client.get("/api/models/info")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "ready")
+        self.assertIn("models", data)
+        self.assertIn("hardware", data)
+
 
 if __name__ == "__main__":
     unittest.main()

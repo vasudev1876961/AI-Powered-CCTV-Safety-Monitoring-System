@@ -32,22 +32,34 @@
     <!-- Navigation Tabs -->
     <nav class="nav-tabs" role="tablist">
       <button class="nav-tab-btn active" id="tabBtnConsole" data-target="tabConsole">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
           <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 15h14v3H5z"/>
         </svg>
         Live Surveillance
       </button>
+      <button class="nav-tab-btn" id="tabBtnBackendHub" data-target="tabBackendHub">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M4 6h16V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 10h-4v-7h4v7z"/>
+        </svg>
+        AI Backend &amp; Microservices
+      </button>
       <button class="nav-tab-btn" id="tabBtnSandbox" data-target="tabSandbox">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
           <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/>
         </svg>
-        Degradation & Enhancement Sandbox
+        Degradation &amp; Restoration Lab
+      </button>
+      <button class="nav-tab-btn" id="tabBtnEvidence" data-target="tabEvidence">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+        </svg>
+        Forensics &amp; Incident Vault
       </button>
       <button class="nav-tab-btn" id="tabBtnBenchmarks" data-target="tabBenchmarks">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
           <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
         </svg>
-        Research Benchmark Lab
+        Research Benchmarks
       </button>
     </nav>
 
@@ -65,6 +77,19 @@
         <span class="label">Backend Status</span>
         <span class="val" id="topWsVal" style="color: var(--accent-cyan);">CLIENT SIM</span>
       </div>
+      <div class="stream-source-switch" id="topStreamSwitch" title="Toggle between client simulation and real FastAPI AI MJPEG stream">
+        <button class="source-pill active" id="btnSourceClient" type="button">
+          <span>⚡ Client Sim</span>
+        </button>
+        <button class="source-pill" id="btnSourceBackend" type="button">
+          <span>📡 AI Stream</span>
+        </button>
+      </div>
+      <button class="action-btn-icon" id="btnToggleFullscreen" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+      </button>
       <div class="audio-ctrl-group">
         <button class="action-btn-icon" id="btnToggleSound" title="Toggle Alarm Sound" aria-label="Toggle Alert Sound">
           <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -147,9 +172,10 @@
         <!-- Video Canvas Viewport -->
         <div class="video-stage-container" id="videoStage">
           <canvas id="videoCanvas" width="960" height="540"></canvas>
-          <canvas id="overlayCanvas" width="960" height="540"></canvas>
-          <div class="cctv-scanlines"></div>
-          <div class="cctv-vignette"></div>
+          <img id="backendStreamImg" src="" style="display: none; width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0; z-index: 2;" alt="FastAPI Live Stream">
+          <canvas id="overlayCanvas" width="960" height="540" style="z-index: 3;"></canvas>
+          <div class="cctv-scanlines" style="z-index: 4;"></div>
+          <div class="cctv-vignette" style="z-index: 4;"></div>
 
           <!-- Live On-Screen CCTV OSD -->
           <div class="cctv-osd-top">
@@ -239,6 +265,10 @@
               <button class="trigger-btn btn-bag" id="btnSimBag">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 Abandoned Luggage
+              </button>
+              <button class="trigger-btn btn-anomaly" id="btnSimAnomaly" style="background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); color: #c084fc;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
+                Panic / Anomaly
               </button>
             </div>
 
@@ -344,7 +374,313 @@
   </main>
 
   <!-- ==========================================================================
-       TAB 2: DEGRADATION & ENHANCEMENT SANDBOX
+       TAB 2: AI BACKEND & MICROSERVICES HUB
+       ========================================================================== -->
+  <section class="tab-view" id="tabBackendHub">
+    <div class="backend-hub-layout">
+      
+      <!-- Top Pipeline Architecture Visualizer -->
+      <div class="pipeline-arch-card">
+        <div class="card-title-row">
+          <div>
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-cyan);"><path d="M4 6h16V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 10h-4v-7h4v7z"/></svg>
+              Distributed AI Pipeline Architecture &amp; Execution Topology
+            </h3>
+            <p class="subtitle">End-to-End Latency: <span id="hubTotalLatency" style="color: var(--accent-cyan); font-weight: 700;">25.5 ms</span> &bull; Pipeline Mode: <span id="hubActivePipelineMode" style="color: var(--accent-emerald); font-weight: 700;">ADAPTIVE QUALITY-AWARE</span></p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="hub-live-badge"><span class="pulse-dot"></span> PIPELINE REAL-TIME</span>
+            <button class="cam-btn" id="btnRefreshBackend" title="Poll latest backend state" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Flow Nodes Grid -->
+        <div class="arch-flow-container">
+          <!-- Node 1: Video Ingestion -->
+          <div class="arch-node">
+            <div class="node-header">
+              <span class="node-step">01</span>
+              <span class="node-status online">STREAMING</span>
+            </div>
+            <div class="node-icon">📹</div>
+            <div class="node-title">CCTV Ingestion</div>
+            <div class="node-meta">RTSP / Simulated Feeds</div>
+            <div class="node-spec">4 Multi-Cam Matrix Wall<br>960&times;540 @ 25 FPS</div>
+            <div class="node-latency">&lt; 1.2 ms</div>
+          </div>
+
+          <div class="arch-arrow">&rarr;</div>
+
+          <!-- Node 2: Quality Estimator & Enhancer -->
+          <div class="arch-node">
+            <div class="node-header">
+              <span class="node-step">02</span>
+              <span class="node-status online">ACTIVE</span>
+            </div>
+            <div class="node-icon">✨</div>
+            <div class="node-title">QASD Preprocessor</div>
+            <div class="node-meta">CLAHE + Wavelet Filter</div>
+            <div class="node-spec">Dynamic Lux/Blur/SNR<br>Bilateral Wiener Restore</div>
+            <div class="node-latency">5.4 ms</div>
+          </div>
+
+          <div class="arch-arrow">&rarr;</div>
+
+          <!-- Node 3: Deep Object Detector -->
+          <div class="arch-node highlight">
+            <div class="node-header">
+              <span class="node-step">03</span>
+              <span class="node-status online">INFERENCE</span>
+            </div>
+            <div class="node-icon">🧠</div>
+            <div class="node-title">YOLOv8 Core</div>
+            <div class="node-meta">Ultralytics PyTorch</div>
+            <div class="node-spec">yolov8n.pt (FP32/CPU)<br>Conf &ge; 0.35 &bull; IoU 0.45</div>
+            <div class="node-latency">14.2 ms</div>
+          </div>
+
+          <div class="arch-arrow">&rarr;</div>
+
+          <!-- Node 4: Multi-Object Tracker -->
+          <div class="arch-node">
+            <div class="node-header">
+              <span class="node-step">04</span>
+              <span class="node-status online">TRACKING</span>
+            </div>
+            <div class="node-icon">🎯</div>
+            <div class="node-title">ByteTrack / Kalman</div>
+            <div class="node-meta">Continuous State Filter</div>
+            <div class="node-spec">Trajectory &amp; Velocity<br>Max Lost: 30 Frames</div>
+            <div class="node-latency">2.1 ms</div>
+          </div>
+
+          <div class="arch-arrow">&rarr;</div>
+
+          <!-- Node 5: Threat & Risk Fusion -->
+          <div class="arch-node highlight-threat">
+            <div class="node-header">
+              <span class="node-step">05</span>
+              <span class="node-status online">EVALUATING</span>
+            </div>
+            <div class="node-icon">⚡</div>
+            <div class="node-title">Threat Fusion Core</div>
+            <div class="node-meta">Multi-Factor Geometry</div>
+            <div class="node-spec">Fall, Brawl, Intrusion<br>Temporal Autoencoder</div>
+            <div class="node-latency">3.8 ms</div>
+          </div>
+
+          <div class="arch-arrow">&rarr;</div>
+
+          <!-- Node 6: FastAPI Gateway -->
+          <div class="arch-node">
+            <div class="node-header">
+              <span class="node-step">06</span>
+              <span class="node-status online">BROADCAST</span>
+            </div>
+            <div class="node-icon">🌐</div>
+            <div class="node-title">FastAPI Gateway</div>
+            <div class="node-meta">WebSockets &amp; MJPEG</div>
+            <div class="node-spec">REST API &bull; JSON Telemetry<br>Forensic Evidence Store</div>
+            <div class="node-latency">&lt; 1.0 ms</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Microservices Health & Metric Cards -->
+      <div class="backend-kpi-grid">
+        <div class="backend-kpi-card">
+          <div class="kpi-icon-wrap" style="color: var(--accent-cyan); background: rgba(0,242,254,0.1);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          </div>
+          <div class="kpi-content">
+            <div class="kpi-label">FastAPI ASGI Server</div>
+            <div class="kpi-val" id="kpiServerStatus">ONLINE :8000</div>
+            <div class="kpi-sub" id="kpiServerUptime">Uptime: Active &bull; v2.0.0</div>
+          </div>
+        </div>
+
+        <div class="backend-kpi-card">
+          <div class="kpi-icon-wrap" style="color: var(--accent-emerald); background: rgba(16,185,129,0.1);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          </div>
+          <div class="kpi-content">
+            <div class="kpi-label">YOLOv8 Inference Engine</div>
+            <div class="kpi-val" id="kpiDetectorDevice">CPU (FP32)</div>
+            <div class="kpi-sub" id="kpiDetectorModel">yolov8n.pt &bull; Conf &ge; 0.35</div>
+          </div>
+        </div>
+
+        <div class="backend-kpi-card">
+          <div class="kpi-icon-wrap" style="color: var(--accent-amber); background: rgba(245,158,11,0.1);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          </div>
+          <div class="kpi-content">
+            <div class="kpi-label">Tracker &amp; Threat Engine</div>
+            <div class="kpi-val" id="kpiActiveTracksCount">3 Active Tracks</div>
+            <div class="kpi-sub" id="kpiThreatAlertsCount">0 Active Violations</div>
+          </div>
+        </div>
+
+        <div class="backend-kpi-card">
+          <div class="kpi-icon-wrap" style="color: var(--accent-purple); background: rgba(139,92,246,0.1);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          </div>
+          <div class="kpi-content">
+            <div class="kpi-label">WebSocket Telemetry Hub</div>
+            <div class="kpi-val" id="kpiActiveClients">1 Connected</div>
+            <div class="kpi-sub" id="kpiFramesProcessed">0 frames processed</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Operational Dual Column: REST API Explorer & Live Server Logs -->
+      <div class="backend-interactive-grid">
+        
+        <!-- Left: Interactive API & Hyperparameters Tuner -->
+        <div class="backend-card">
+          <div class="card-title-row">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-cyan);"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Interactive REST API Explorer &amp; Threshold Tuner
+            </h3>
+            <span class="badge-mini">POST /api/config</span>
+          </div>
+
+          <!-- Quick Test Endpoint Buttons -->
+          <div style="margin-bottom: 14px;">
+            <div style="font-size: 0.72rem; color: var(--text-dim); font-family: var(--font-mono); text-transform: uppercase; margin-bottom: 6px;">
+              Quick API Query Testers:
+            </div>
+            <div class="api-btn-row">
+              <button type="button" class="api-tester-btn" data-endpoint="/api/health">GET /api/health</button>
+              <button type="button" class="api-tester-btn" data-endpoint="/api/config">GET /api/config</button>
+              <button type="button" class="api-tester-btn" data-endpoint="/api/metrics/summary">GET /api/metrics</button>
+              <button type="button" class="api-tester-btn" data-endpoint="/api/models/info">GET /api/models/info</button>
+              <button type="button" class="api-tester-btn" data-endpoint="/api/presets/geofences">GET /api/presets</button>
+              <button type="button" class="api-tester-btn" data-endpoint="/api/logs">GET /api/logs</button>
+            </div>
+          </div>
+
+          <!-- Runtime Thresholds Slider Form -->
+          <form id="formRuntimeConfig" class="runtime-config-form">
+            <div class="form-grid-2col">
+              <div class="form-group">
+                <label for="cfgActiveCamera">Active Camera Feed</label>
+                <select id="cfgActiveCamera" class="form-select">
+                  <option value="CAM_01">CAM-01 (Main Corridor)</option>
+                  <option value="CAM_02">CAM-02 (Dark Stairwell)</option>
+                  <option value="CAM_03">CAM-03 (Perimeter Zone)</option>
+                  <option value="CAM_04">CAM-04 (Warehouse Floor)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="cfgEnhancementMode">Enhancement Routing</label>
+                <select id="cfgEnhancementMode" class="form-select">
+                  <option value="auto">Auto Adaptive (QASD)</option>
+                  <option value="forced">Force Enhancement Always</option>
+                  <option value="bypass">Bypass Raw Feed</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <div class="label-with-val">
+                  <label for="rangeFallThresh">Fall Velocity Threshold</label>
+                  <span id="valFallThresh" class="range-val">75 px/s</span>
+                </div>
+                <input type="range" id="rangeFallThresh" min="30" max="150" value="75" class="form-range">
+              </div>
+
+              <div class="form-group">
+                <div class="label-with-val">
+                  <label for="rangeViolenceThresh">Violence Proximity Dist</label>
+                  <span id="valViolenceThresh" class="range-val">50 px</span>
+                </div>
+                <input type="range" id="rangeViolenceThresh" min="20" max="120" value="50" class="form-range">
+              </div>
+
+              <div class="form-group">
+                <div class="label-with-val">
+                  <label for="rangeAnomalyThresh">Temporal Anomaly Threshold</label>
+                  <span id="valAnomalyThresh" class="range-val">0.65</span>
+                </div>
+                <input type="range" id="rangeAnomalyThresh" min="0.2" max="0.95" step="0.05" value="0.65" class="form-range">
+              </div>
+
+              <div class="form-group">
+                <div class="label-with-val">
+                  <label for="rangeCooldownThresh">Alert Suppress Cooldown</label>
+                  <span id="valCooldownThresh" class="range-val">5.0 s</span>
+                </div>
+                <input type="range" id="rangeCooldownThresh" min="1.0" max="20.0" step="0.5" value="5.0" class="form-range">
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 10px; flex-wrap: wrap;">
+              <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer" class="cam-btn" style="color: var(--accent-cyan); text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                FastAPI Swagger Docs
+              </a>
+              <button type="button" id="btnPushConfig" class="cam-btn active" style="font-weight: 700;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                Deploy Configuration to Backend
+              </button>
+            </div>
+          </form>
+
+          <!-- Live API Response Viewer -->
+          <div class="api-response-block">
+            <div class="response-header">
+              <span id="apiEndpointTitle">API Response &bull; GET /api/health</span>
+              <button id="btnCopyApiResponse" class="cam-btn" style="padding: 2px 8px; font-size: 0.65rem;" type="button">Copy JSON</button>
+            </div>
+            <pre class="json-code-viewer" id="apiResponseContent">Click any API endpoint button above to inspect live backend response...</pre>
+          </div>
+        </div>
+
+        <!-- Right: Live Backend Server Logs Terminal -->
+        <div class="backend-card">
+          <div class="card-title-row">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-emerald);"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z"/></svg>
+              Live Backend Event &amp; Inference Terminal
+            </h3>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <select id="selectLogLevelFilter" style="background: rgba(6,9,17,0.7); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 2px 6px; border-radius: var(--radius-sm); font-size: 0.68rem; font-family: var(--font-mono);">
+                <option value="ALL">ALL LOGS</option>
+                <option value="INFO">INFO</option>
+                <option value="ALERT">ALERTS</option>
+                <option value="CRITICAL">CRITICAL</option>
+              </select>
+              <button class="cam-btn" id="btnClearServerLogs" style="padding: 2px 7px; font-size: 0.65rem;" type="button">Clear</button>
+              <button class="cam-btn" id="btnRefreshServerLogs" style="padding: 2px 7px; font-size: 0.65rem;" type="button">Fetch</button>
+            </div>
+          </div>
+
+          <div class="terminal-container" id="terminalContainer">
+            <div class="terminal-banner">
+              [SYSTEM] QASD HIGH-THROUGHPUT AI LOGGING STREAM // PORT 8000
+            </div>
+            <div class="terminal-logs-body" id="terminalLogsBody">
+              <!-- Logs injected via JS -->
+            </div>
+            <div class="terminal-footer">
+              <span class="terminal-cursor">&gt;</span> <span style="color: var(--text-dim);">Listening for FastAPI events, alerts, and model telemetry...</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       TAB 3: DEGRADATION & ENHANCEMENT SANDBOX
        ========================================================================== -->
   <section class="tab-view" id="tabSandbox">
     <div class="sandbox-layout">
@@ -440,7 +776,68 @@
   </section>
 
   <!-- ==========================================================================
-       TAB 3: RESEARCH BENCHMARK LABORATORY
+       TAB 4: FORENSIC EVIDENCE & INCIDENT VAULT
+       ========================================================================== -->
+  <section class="tab-view" id="tabEvidence">
+    <div class="evidence-vault-layout">
+      
+      <!-- Vault Header Strip -->
+      <div class="vault-header-card">
+        <div class="card-title-row">
+          <div>
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-cyan);"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+              Forensic Incident Evidence Vault &amp; Chain-of-Custody Archive
+            </h3>
+            <p class="subtitle">Search, inspect, and export Explainable AI (XAI) evidence dossiers with Grad-CAM heatmaps, kinematics, and keyframe timelines.</p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="cam-btn" id="btnExportAllEvidenceJson" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              Export Vault JSON
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="vault-filter-strip">
+          <div class="vault-search-box">
+            <input type="text" id="inputVaultSearch" placeholder="Search by incident type, camera ID, reason, track ID..." class="vault-search-input">
+          </div>
+          <div class="vault-filters-group">
+            <select id="selectVaultCamera" class="vault-select">
+              <option value="ALL">All Cameras</option>
+              <option value="CAM_01">CAM-01 Entrance</option>
+              <option value="CAM_02">CAM-02 Stairwell</option>
+              <option value="CAM_03">CAM-03 Perimeter</option>
+              <option value="CAM_04">CAM-04 Warehouse</option>
+            </select>
+            <select id="selectVaultSeverity" class="vault-select">
+              <option value="ALL">All Severities</option>
+              <option value="CRITICAL">Critical Severity</option>
+              <option value="HIGH">High Severity</option>
+              <option value="MEDIUM">Medium Severity</option>
+              <option value="LOW">Low Severity</option>
+            </select>
+            <span id="vaultCountBadge" class="vault-count-badge">0 Dossiers</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dossiers Grid -->
+      <div class="evidence-grid-container" id="evidenceGridContainer">
+        <div class="empty-evidence-placeholder" id="emptyEvidencePlaceholder">
+          <div style="font-size: 2.2rem; margin-bottom: 8px; opacity: 0.6;">📁</div>
+          <div style="font-size: 1rem; font-weight: 600; color: var(--text-main);">No Forensic Incident Dossiers Stored</div>
+          <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 6px; max-width: 440px; text-align: center;">Simulate an incident (Fall, Altercation, Intrusion, Luggage) on the Live Surveillance tab to generate cryptographically timestamped evidence packs.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       TAB 5: RESEARCH BENCHMARK LABORATORY
        ========================================================================== -->
   <section class="tab-view" id="tabBenchmarks">
     <div class="benchmark-layout">
