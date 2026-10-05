@@ -252,23 +252,35 @@
               <span style="font-size: 0.72rem; color: var(--text-dim); font-family: var(--font-mono); text-transform: uppercase;">Simulate Incident:</span>
               <button class="trigger-btn btn-fall" id="btnSimFall">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                Fall Incident
+                Fall
               </button>
               <button class="trigger-btn btn-fight" id="btnSimFight">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                Physical Altercation
+                Fight
               </button>
               <button class="trigger-btn btn-intrusion" id="btnSimIntrusion">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                Zone Intrusion
+                Intrusion
               </button>
               <button class="trigger-btn btn-bag" id="btnSimBag">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                Abandoned Luggage
+                Bag
+              </button>
+              <button class="trigger-btn" id="btnSimLoiter" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                Loiter
+              </button>
+              <button class="trigger-btn" id="btnSimCrowd" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                Crowd Surge
+              </button>
+              <button class="trigger-btn" id="btnSimFire" style="background: rgba(249, 115, 22, 0.15); border: 1px solid rgba(249, 115, 22, 0.4); color: #fb923c;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
+                Fire / Smoke
               </button>
               <button class="trigger-btn btn-anomaly" id="btnSimAnomaly" style="background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); color: #c084fc;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
-                Panic / Anomaly
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                Anomaly
               </button>
             </div>
 
@@ -365,6 +377,31 @@
             <div class="empty-alerts-placeholder" id="emptyAlertsPlaceholder">
               Monitoring surveillance stream for unexpected incidents...
             </div>
+          </div>
+        </div>
+
+        <!-- Cross-Camera Re-ID & Multi-Stream Handover Tracker Card -->
+        <div class="telemetry-card reid-card" style="margin-top: 14px;">
+          <div class="card-title-row">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent-cyan);"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+              Cross-Camera Re-ID Handover
+            </h3>
+            <span class="badge-mini" id="reidEntityCountBadge">0 ENTITIES</span>
+          </div>
+
+          <div style="font-size: 0.72rem; color: var(--text-dim); margin-bottom: 8px;">
+            Autonomous visual signature matching &amp; cross-camera transition tracking.
+          </div>
+
+          <!-- Active Global Entities Chips -->
+          <div id="reidGlobalEntitiesList" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+            <span class="badge-pill" style="background: rgba(0, 242, 254, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);">G-101 (Entrance)</span>
+          </div>
+
+          <!-- Handover Events Log -->
+          <div id="reidHandoverList" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.68rem;">
+            <div style="color: var(--text-dim); padding: 4px 0;">Awaiting camera transition handover...</div>
           </div>
         </div>
 
@@ -978,10 +1015,22 @@
           </div>
         </div>
 
+        <!-- Cryptographic Seal Status Strip in Modal -->
+        <div id="modalSealContainer" style="background: rgba(13,16,23,0.8); border: 1px solid var(--border-subtle); padding: 10px 14px; border-radius: var(--radius-sm); margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div style="font-family: var(--font-mono); font-size: 0.70rem; color: var(--accent-emerald);">
+            <span style="font-weight: 700;">&#10003; SHA-256 SEAL:</span> <span id="modalSha256Val" style="color: var(--text-dim); word-break: break-all;">Authenticating...</span>
+          </div>
+          <button class="cam-btn" id="btnVerifyModalSeal" style="padding: 3px 8px; font-size: 0.68rem; color: var(--accent-cyan);">Verify Integrity</button>
+        </div>
+
         <!-- Modal Footer Actions -->
-        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-subtle); padding-top: 14px;">
-          <button class="cam-btn" id="btnPrintReport" title="Print formal incident audit report">Print Forensic Report</button>
-          <button class="cam-btn" id="btnExportDossierJson">Export Evidence JSON</button>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-subtle); padding-top: 14px; margin-top: 14px;">
+          <button class="cam-btn" id="btnExportOfficialDossier" style="color: var(--accent-cyan); border-color: rgba(0,242,254,0.4);" title="Open official standalone printable forensic HTML dossier with cryptographic seal">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+            Export Official Dossier (HTML/PDF)
+          </button>
+          <button class="cam-btn" id="btnPrintReport" title="Print formal incident audit report">Print Preview</button>
+          <button class="cam-btn" id="btnExportDossierJson">Export JSON</button>
           <button class="cam-btn active" id="btnAckIncident">Acknowledge & Archive</button>
         </div>
       </div>

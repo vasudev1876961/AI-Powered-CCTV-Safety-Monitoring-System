@@ -609,6 +609,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const btnSimLoiter = document.getElementById('btnSimLoiter');
+  if (btnSimLoiter) {
+    btnSimLoiter.addEventListener('click', () => {
+      simulator.triggerIncident('loiter');
+      sendWsMessage({ action: 'trigger_incident', type: 'loiter' });
+      xaiManager.showToast({
+        incidentType: 'Suspicious Loitering',
+        severity: 'MEDIUM',
+        reasons: ['Subject lingering inside restricted safety zone beyond allowable duration.']
+      });
+    });
+  }
+
+  const btnSimCrowd = document.getElementById('btnSimCrowd');
+  if (btnSimCrowd) {
+    btnSimCrowd.addEventListener('click', () => {
+      simulator.triggerIncident('crowd');
+      sendWsMessage({ action: 'trigger_incident', type: 'crowd' });
+      xaiManager.showToast({
+        incidentType: 'Crowd Surge / Stampede Hazard',
+        severity: 'CRITICAL',
+        reasons: ['Sudden high-velocity collective crowd dispersion recognized.']
+      });
+    });
+  }
+
+  const btnSimFire = document.getElementById('btnSimFire');
+  if (btnSimFire) {
+    btnSimFire.addEventListener('click', () => {
+      simulator.triggerIncident('fire');
+      sendWsMessage({ action: 'trigger_incident', type: 'fire' });
+      xaiManager.showToast({
+        incidentType: 'Fire & Combustion Hazard',
+        severity: 'CRITICAL',
+        reasons: ['Early optical chromatic flame and smoke plume signature identified.']
+      });
+    });
+  }
+
   // Stream Source Switcher (Client Sim vs Live FastAPI MJPEG Stream)
   const btnSourceClient = document.getElementById('btnSourceClient');
   const btnSourceBackend = document.getElementById('btnSourceBackend');
@@ -621,7 +660,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btnSourceBackend) btnSourceBackend.classList.add('active');
       if (btnSourceClient) btnSourceClient.classList.remove('active');
       if (backendStreamImg) {
-        backendStreamImg.src = `/api/stream/${simulator.currentCam}?t=${Date.now()}`;
+        const streamUrl = simulator.currentCam === 'QUAD'
+          ? `/api/stream/matrix?t=${Date.now()}`
+          : `/api/stream/${simulator.currentCam}?t=${Date.now()}`;
+        backendStreamImg.src = streamUrl;
         backendStreamImg.style.display = 'block';
       }
       videoCanvas.style.display = 'none';
@@ -652,6 +694,49 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSourceClient) {
     btnSourceClient.addEventListener('click', () => setStreamSource(false));
   }
+
+  // Cross-Camera Re-ID Handover Poller
+  async function refreshReIdPanel() {
+    try {
+      const [resEnt, resHand] = await Promise.all([
+        fetch('/api/reid/entities').catch(() => null),
+        fetch('/api/reid/handovers').catch(() => null)
+      ]);
+
+      if (resEnt && resEnt.ok) {
+        const entities = await resEnt.json();
+        const badge = document.getElementById('reidEntityCountBadge');
+        if (badge) badge.textContent = `${entities.length} ENTITIES`;
+
+        const chipsWrap = document.getElementById('reidGlobalEntitiesList');
+        if (chipsWrap && entities.length > 0) {
+          chipsWrap.innerHTML = entities.map(e => `
+            <span class="badge-pill" style="background: rgba(0, 242, 254, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);">
+              ${e.global_id} (${e.current_camera})
+            </span>
+          `).join('');
+        }
+      }
+
+      if (resHand && resHand.ok) {
+        const handovers = await resHand.json();
+        const handList = document.getElementById('reidHandoverList');
+        if (handList && handovers.length > 0) {
+          handList.innerHTML = handovers.slice(0, 4).map(h => `
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 3px 0;">
+              <span style="color: var(--accent-cyan);">${h.global_id}: ${h.from_camera} &rarr; ${h.to_camera}</span>
+              <span style="color: var(--accent-emerald); font-weight: bold;">${Math.round(h.similarity_score * 100)}% Match</span>
+            </div>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      // Backend not running, skip quietly
+    }
+  }
+
+  setInterval(refreshReIdPanel, 3500);
+  refreshReIdPanel();
 
   // Fullscreen button
   const btnToggleFullscreen = document.getElementById('btnToggleFullscreen');

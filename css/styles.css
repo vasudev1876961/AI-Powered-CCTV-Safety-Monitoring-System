@@ -2187,5 +2187,24 @@ body {
   color: var(--text-muted);
 }
 
+.reid-card {
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  background: radial-gradient(circle at top right, rgba(0, 242, 254, 0.05), rgba(15, 23, 42, 0.75));
+  transition: all 0.3s ease;
+}
 
+.reid-card:hover {
+  border-color: rgba(0, 242, 254, 0.45);
+  box-shadow: 0 4px 20px rgba(0, 242, 254, 0.12);
+}
 
+.badge-sha256 {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: var(--accent-emerald);
+  border-radius: var(--radius-sm);
+}

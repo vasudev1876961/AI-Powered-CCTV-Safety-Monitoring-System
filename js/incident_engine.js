@@ -305,7 +305,39 @@ class IncidentRecognitionEngine {
       }
     }
 
-    // 5. Compute Continuous Anomaly Score
+    // 5. Crowd Congestion & Stampede Hazard
+    if (persons.length >= 4) {
+      let clusterSpeed = 0;
+      for (const p of persons) {
+        const pHist = this.trackHistories.get(p.id);
+        if (pHist && pHist.velocities.length > 0) {
+          const [vx, vy] = pHist.velocities[pHist.velocities.length - 1];
+          clusterSpeed += Math.hypot(vx, vy);
+        }
+      }
+      const avgClusterSpeed = clusterSpeed / persons.length;
+      if (avgClusterSpeed > 60) {
+        detectedAlerts.push({
+          incidentType: 'Crowd Surge / Stampede Hazard',
+          trackId: persons[0].id,
+          bbox: persons[0].bbox,
+          confidence: 0.94,
+          temporalConf: 0.95,
+          detectionConf: 0.92,
+          reasons: [
+            `Sudden collective acceleration detected (${avgClusterSpeed.toFixed(1)} px/s avg velocity)`,
+            `Co-located cluster of ${persons.length} subjects in rapid motion`,
+            'High crushing or uncontrolled evacuation surge hazard'
+          ],
+          metrics: {
+            crowdSize: persons.length,
+            collectiveSpeed: avgClusterSpeed.toFixed(1)
+          }
+        });
+      }
+    }
+
+    // 6. Compute Continuous Anomaly Score
     const anomalyScore = this.computeAnomalyScore(activeTracks);
 
     // 6. Calculate Unified Multi-Factor Risk Score:

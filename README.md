@@ -235,7 +235,7 @@ Outputs formatted ASCII comparison tables and updates `benchmark_results.json`.
 
 ### Option E: Running Automated Test Suites
 ```bash
-# Execute all 34 automated unit and integration tests
+# Execute all 51 automated unit and integration tests
 pytest -v
 ```
 
@@ -245,10 +245,10 @@ pytest -v
 
 The web operations console features an Obsidian Cyber-Command design system tailored for mission-critical surveillance:
 
-1. **📡 Live Surveillance Console**: Multi-channel feeds (CAM-01 to CAM-04, 2x2 Quad Matrix), live stream switcher (`📡 AI Stream` vs `⚡ Client Sim`), interactive polygonal geofencing, real-time multi-factor risk gauge, and quick incident trigger simulations.
-2. **⚙️ AI Backend & Microservices Hub**: Distributed pipeline architecture flow visualizer, microservices health telemetry (FastAPI, YOLOv8, ByteTrack, Threat Core), interactive REST API playground, live hyperparameter threshold tuner, and a real-time scrolling terminal log stream.
+1. **📡 Live Surveillance Console**: Multi-channel feeds (CAM-01 to CAM-04, 2x2 Quad Matrix), live stream switcher (`📡 AI Stream` vs `⚡ Client Sim`), interactive polygonal geofencing, real-time multi-factor risk gauge, quick incident trigger simulations (Falls, Altercations, Intrusions, Unattended Bags, Loitering, Crowd Surge, Fire/Smoke), and a live Cross-Camera Re-ID Handover Monitor.
+2. **⚙️ AI Backend & Microservices Hub**: Distributed pipeline architecture flow visualizer, microservices health telemetry (FastAPI, YOLOv8, ByteTrack, Re-ID Engine, Threat Core), interactive REST API playground, live hyperparameter threshold tuner, and a real-time scrolling terminal log stream.
 3. **🔬 Degradation & Restoration Lab**: Interactive before/after split evaluation of poor CCTV feeds with real-time controls for illumination (lux), sensor noise (dB), blur (px), downsampling, atmospheric haze, and compression.
-4. **📁 Forensics & Evidence Vault**: Searchable incident archive, full explainable AI (XAI) dossiers with keyframe replay scrubber, Grad-CAM saliency attention maps, kinematic velocity profiles, and formal certificate printing.
+4. **📁 Forensics & Evidence Vault**: Searchable incident archive, full explainable AI (XAI) dossiers with keyframe replay scrubber, Grad-CAM saliency attention maps, kinematic velocity profiles, cryptographic SHA-256 integrity seal verification, and standalone printable official HTML/PDF forensic dossier export.
 5. **📊 Research Benchmark Lab**: Empirical validation graphs, mAP@50 curves, ROC-AUC distributions, latency breakdowns, and CSV export.
 
 ---
@@ -259,10 +259,16 @@ The web operations console features an Obsidian Cyber-Command design system tail
 |---|---|---|
 | `/ws/detections` | WebSocket | Real-time bi-directional pipeline telemetry & control |
 | `/api/stream/{cam_id}` | GET | Live MJPEG video stream with burned-in HUD telemetry (zero-cost broadcast) |
+| `/api/stream/matrix` | GET | Real-time 4-channel synchronized 2x2 tactical command matrix stream |
 | `/api/snapshot/{cam_id}` | GET | Capture high-resolution forensic snapshot with watermarked metadata |
+| `/api/reid/entities` | GET | List active global entities and cross-camera transit journeys |
+| `/api/reid/handovers` | GET | Retrieve recent cross-camera handover events with match scores |
+| `/api/evidence/{alert_id}/export` | GET | Generate official standalone printable HTML/PDF forensic incident dossier |
+| `/api/evidence/{alert_id}/verify` | GET | Verify cryptographic SHA-256 tamper-evident integrity seal |
+| `/api/incidents/types` | GET | Retrieve list of 8 supported incident recognition categories |
 | `/api/analyze_video` | POST | Deep forensic audit on uploaded MP4/AVI CCTV video files |
 | `/api/health` | GET | System uptime, loaded model, device, active camera, and WS client count |
-| `/api/models/info` | GET | Deep neural network inspection (YOLOv8, tracker, risk core, device) |
+| `/api/models/info` | GET | Deep neural network inspection (YOLOv8, tracker, Re-ID, risk core) |
 | `/api/logs` | GET | Operational server event logs with level filtering (ALL, INFO, ALERT, CRITICAL) |
 | `/api/logs/clear` | POST | Reset in-memory server log buffer |
 | `/api/system_info` | GET | Complete pipeline topology, detector classes, and active geofences |
@@ -277,5 +283,5 @@ The web operations console features an Obsidian Cyber-Command design system tail
 
 ---
 
-## 8. License
+## 9. License
 This project is developed for academic research and final year project (FYP) demonstration under the MIT License.

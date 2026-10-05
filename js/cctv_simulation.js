@@ -182,6 +182,26 @@ class CCTVEnvironmentSimulator {
           { id: 61, class: 'backpack', x: 260, y: 360, w: 32, h: 26, vx: 0, vy: 0, state: 'stationary', conf: 0.87 }
         ];
       }
+    } else if (type === 'loiter') {
+      const p = this.actors.find(a => a.class === 'person') || this.actors[0];
+      if (p) {
+        p.state = 'loitering';
+        p.vx = 0.05;
+        p.vy = 0.02;
+        p.x = 420;
+        p.y = 280;
+      }
+    } else if (type === 'crowd') {
+      this.actors = [
+        { id: 71, class: 'person', x: 380, y: 280, w: 40, h: 100, vx: 4.5, vy: 0.5, state: 'stampede', conf: 0.94 },
+        { id: 72, class: 'person', x: 425, y: 275, w: 42, h: 104, vx: 4.8, vy: 0.8, state: 'stampede', conf: 0.92 },
+        { id: 73, class: 'person', x: 460, y: 290, w: 44, h: 108, vx: 4.2, vy: 0.3, state: 'stampede', conf: 0.91 },
+        { id: 74, class: 'person', x: 395, y: 310, w: 41, h: 102, vx: 4.6, vy: 0.6, state: 'stampede', conf: 0.90 },
+        { id: 75, class: 'person', x: 440, y: 320, w: 43, h: 106, vx: 5.0, vy: 0.4, state: 'stampede', conf: 0.93 }
+      ];
+    } else if (type === 'fire') {
+      this.fireActive = true;
+      this.fireTimer = 180;
     }
   }
 
@@ -297,6 +317,34 @@ class CCTVEnvironmentSimulator {
         ctx.lineTo(x - 40, height);
         ctx.fill();
       }
+    // Render dynamic fire / flame / smoke if triggered
+    if (this.fireActive && this.fireTimer > 0) {
+      this.fireTimer--;
+      const fx = width * 0.72;
+      const fy = height * 0.65;
+      const flicker = (Math.random() - 0.5) * 14;
+
+      // Flame core
+      ctx.fillStyle = '#ff7700';
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, 45 + flicker, 65 + flicker, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffee00';
+      ctx.beginPath();
+      ctx.ellipse(fx, fy + 15, 26, 40, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rising smoke puffs
+      ctx.fillStyle = 'rgba(120, 120, 120, 0.45)';
+      for (let s = 0; s < 4; s++) {
+        const sy = fy - 45 - s * 35;
+        const sx = fx + Math.sin(this.frameCounter * 0.1 + s) * 20;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 25 + s * 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (this.fireTimer === 0) this.fireActive = false;
     }
   }
 
