@@ -202,6 +202,26 @@ class CCTVEnvironmentSimulator {
     } else if (type === 'fire') {
       this.fireActive = true;
       this.fireTimer = 180;
+    } else if (type === 'ppe') {
+      const p = this.actors.find(a => a.class === 'person') || this.actors[0];
+      if (p) {
+        p.ppeCompliant = false;
+        p.state = 'walking';
+      }
+    } else if (type === 'collision') {
+      const ped = this.actors.find(a => a.class === 'person') || this.actors[0];
+      ped.x = 420; ped.y = 300; ped.vx = 0.5; ped.vy = 0;
+      this.actors = [
+        ped,
+        { id: 91, class: 'car', x: 620, y: 300, w: 90, h: 60, vx: -4.0, vy: 0, state: 'closing', conf: 0.95 }
+      ];
+    } else if (type === 'mandown') {
+      const person = this.actors.find(a => a.class === 'person') || this.actors[0];
+      person.state = 'mandown';
+      person.fallProgress = 1.0;
+      person.vx = 0;
+      person.vy = 0;
+      person.immobileFrames = 150;
     }
   }
 

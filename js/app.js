@@ -648,6 +648,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const btnSimPPE = document.getElementById('btnSimPPE');
+  if (btnSimPPE) {
+    btnSimPPE.addEventListener('click', () => {
+      simulator.triggerIncident('ppe');
+      sendWsMessage({ action: 'trigger_incident', type: 'ppe' });
+      xaiManager.showToast({
+        incidentType: 'Industrial PPE Safety Gear Breach',
+        severity: 'HIGH',
+        reasons: ['Worker detected in designated safety hazard perimeter without mandatory helmet and hi-vis vest.']
+      });
+    });
+  }
+
+  const btnSimCollision = document.getElementById('btnSimCollision');
+  if (btnSimCollision) {
+    btnSimCollision.addEventListener('click', () => {
+      simulator.triggerIncident('collision');
+      sendWsMessage({ action: 'trigger_incident', type: 'collision' });
+      xaiManager.showToast({
+        incidentType: 'Vehicle Collision Threat (TTC)',
+        severity: 'CRITICAL',
+        reasons: ['Forklift and worker closing on intersecting collision vector. Time-To-Collision < 2.0s.']
+      });
+    });
+  }
+
+  const btnSimMandown = document.getElementById('btnSimMandown');
+  if (btnSimMandown) {
+    btnSimMandown.addEventListener('click', () => {
+      simulator.triggerIncident('mandown');
+      sendWsMessage({ action: 'trigger_incident', type: 'mandown' });
+      xaiManager.showToast({
+        incidentType: 'Worker Immobility (Man-Down)',
+        severity: 'CRITICAL',
+        reasons: ['Worker motionless on ground for extended duration without kinetic recovery. Staged dispatch alert active.']
+      });
+    });
+  }
+
   // Stream Source Switcher (Client Sim vs Live FastAPI MJPEG Stream)
   const btnSourceClient = document.getElementById('btnSourceClient');
   const btnSourceBackend = document.getElementById('btnSourceBackend');
@@ -883,6 +922,33 @@ document.addEventListener('DOMContentLoaded', () => {
           severity: 'LOW',
           reasons: ['API JSON response copied to system clipboard.']
         });
+      }
+  // Webhook Test Dispatch Button
+  const btnTestWebhookDispatch = document.getElementById('btnTestWebhookDispatch');
+  if (btnTestWebhookDispatch) {
+    btnTestWebhookDispatch.addEventListener('click', async () => {
+      const logsContainer = document.getElementById('webhookDispatchLogs');
+      if (logsContainer) logsContainer.innerHTML = '<span style="color: var(--accent-cyan);">Dispatching test incident to SOC & Webhooks...</span>';
+      try {
+        const resp = await fetch('/api/webhooks/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ incident_type: 'worker_mandown', severity: 'CRITICAL' })
+        });
+        if (resp.ok) {
+          const res = await resp.json();
+          if (logsContainer) {
+            logsContainer.innerHTML = `<span style="color: var(--accent-emerald);">[SUCCESS] Dispatched to ${res.targets_contacted} targets at ${new Date().toLocaleTimeString()}</span><br>` +
+              res.dispatch_results.map(r => `&bull; ${r.webhook_name} (${r.target_url}): Status ${r.status_code}`).join('<br>');
+          }
+          xaiManager.showToast({
+            incidentType: 'Webhook Dispatch Ping',
+            severity: 'CRITICAL',
+            reasons: [`Successfully contacted ${res.targets_contacted} external SOC endpoints with SHA-256 sealed payload.`]
+          });
+        }
+      } catch (err) {
+        if (logsContainer) logsContainer.innerHTML = `<span style="color: var(--accent-amber);">Test ping simulated (Backend offline: ${err.message})</span>`;
       }
     });
   }

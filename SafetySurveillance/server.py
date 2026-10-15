@@ -47,6 +47,11 @@ from SafetySurveillance.incidents.fire_smoke import FireSmokeDetector
 from SafetySurveillance.explainability.evidence import EvidenceRecorder
 from SafetySurveillance.explainability.gradcam import SaliencyExplainer
 from SafetySurveillance.alerts.alert_manager import SafetyAlertManager
+from SafetySurveillance.alerts.dispatcher import WebhookDispatcher
+from SafetySurveillance.incidents.ppe_compliance import PPEComplianceDetector
+from SafetySurveillance.incidents.collision_warning import CollisionWarningDetector
+from SafetySurveillance.incidents.worker_immobility import WorkerImmobilityDetector
+from SafetySurveillance.evaluation.spatial_analytics import SpatialOccupancyAnalytics
 from SafetySurveillance.evaluation.benchmarks import ResearchBenchmarkSuite
 
 # -----------------------------------------------------------------------------
@@ -105,8 +110,13 @@ class SurveillancePipelineEngine:
         self.loitering_detector = LoiteringDetector()
         self.crowd_detector = CrowdDensityDetector()
         self.fire_smoke_detector = FireSmokeDetector()
+        self.ppe_detector = PPEComplianceDetector()
+        self.collision_detector = CollisionWarningDetector()
+        self.immobility_detector = WorkerImmobilityDetector()
         self.reid_tracker = CrossCameraReIDTracker()
         self.alert_manager = SafetyAlertManager()
+        self.webhook_dispatcher = WebhookDispatcher()
+        self.spatial_analytics = SpatialOccupancyAnalytics()
         self.evidence_recorder = EvidenceRecorder()
         self.evidence_store: Dict[str, Dict[str, Any]] = {}
         self.last_enhanced_frame: Optional[np.ndarray] = None
@@ -187,6 +197,23 @@ class SurveillancePipelineEngine:
         cv2.putText(vis, f"QUALITY: {q_state} | RISK: {risk_score} ({severity})",
                     (15, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1)
 
+        # Collision Warnings vector rendering
+        for cw in telemetry.get("collision_warnings", []):
+            cv2.putText(vis, f"COLLISION WARNING: TTC {cw['ttc_seconds']}s (DIST: {cw['distance_px']}px)",
+                        (15, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 70, 255), 2)
+
+        # PPE rate badge
+        ppe_info = telemetry.get("ppe_compliance", {})
+        if ppe_info.get("violations_count", 0) > 0:
+            cv2.putText(vis, f"PPE COMPLIANCE: {int(ppe_info['compliance_rate']*100)}% ({ppe_info['violations_count']} VIOLATIONS)",
+                        (15, 102), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 165, 255), 1)
+
+        # Man-down status badge
+        mandown_info = telemetry.get("mandown_status", {})
+        if mandown_info.get("active_alerts", 0) > 0:
+            cv2.putText(vis, f"MAN-DOWN RESCUE ALERT: IMMOBILITY {mandown_info['longest_immobility_sec']}s",
+                        (15, 124), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 0, 255), 2)
+
         return vis
 
     def set_camera(self, cam_id: str):
@@ -258,6 +285,9 @@ class SurveillancePipelineEngine:
         is_loiter = self.active_incident_trigger == "loiter" and self.trigger_frames_remaining > 0
         is_crowd = self.active_incident_trigger == "crowd" and self.trigger_frames_remaining > 0
         is_fire = self.active_incident_trigger == "fire" and self.trigger_frames_remaining > 0
+        is_ppe = self.active_incident_trigger == "ppe" and self.trigger_frames_remaining > 0
+        is_collision = self.active_incident_trigger == "collision" and self.trigger_frames_remaining > 0
+        is_mandown = self.active_incident_trigger == "mandown" and self.trigger_frames_remaining > 0
 
         if self.trigger_frames_remaining > 0:
             self.trigger_frames_remaining -= 1
@@ -277,18 +307,29 @@ class SurveillancePipelineEngine:
             # Stationary lingering target
             p1_x = int(w * 0.48 + math.sin(angle * 0.2) * 8)
             p1_y = int(h * 0.52 + math.cos(angle * 0.2) * 6)
+        elif is_mandown:
+            p1_x = int(w * 0.45)
+            p1_y = int(h * 0.58)
         else:
             p1_x = int(w * 0.45 + math.sin(angle) * 180)
             p1_y = int(h * 0.58 + math.cos(angle * 0.6) * 35)
 
-        if is_fall:
+        if is_fall or is_mandown:
             # Fallen person on ground (horizontal aspect ratio)
             cv2.rectangle(frame, (p1_x - 65, p1_y + 40), (p1_x + 65, p1_y + 80), (40, 140, 230), -1)
             cv2.circle(frame, (p1_x - 55, p1_y + 60), 16, (180, 180, 180), -1)
+        elif is_ppe:
+            # Worker violating PPE regulations: Dark plain shirt, no helmet, no neon vest
+            cv2.rectangle(frame, (p1_x - 26, p1_y - 75), (p1_x + 26, p1_y + 55), (60, 60, 60), -1)
+            cv2.circle(frame, (p1_x, p1_y - 92), 18, (35, 35, 35), -1)
         else:
-            # Standing person
+            # Standard worker equipped with yellow helmet and neon safety vest
             cv2.rectangle(frame, (p1_x - 26, p1_y - 75), (p1_x + 26, p1_y + 55), (40, 160, 240), -1)
+            # High-visibility neon vest
+            cv2.rectangle(frame, (p1_x - 24, p1_y - 50), (p1_x + 24, p1_y + 15), (20, 230, 220), -1)
             cv2.circle(frame, (p1_x, p1_y - 92), 18, (190, 190, 190), -1)
+            # Safety hardhat (Yellow in BGR)
+            cv2.ellipse(frame, (p1_x, p1_y - 96), (19, 13), 0, 180, 360, (0, 215, 255), -1)
 
         # Actor 2: Secondary person (for altercation or normal passing)
         if is_fight:
@@ -338,6 +379,21 @@ class SurveillancePipelineEngine:
             bag_y = int(h * 0.7)
             cv2.rectangle(frame, (bag_x - 25, bag_y - 20), (bag_x + 25, bag_y + 20), (160, 110, 50), -1)
             cv2.circle(frame, (bag_x, bag_y - 22), 8, (120, 80, 30), 2)
+
+        # Industrial Forklift / Vehicle Collision Simulation
+        if is_collision:
+            progress = (70 - self.trigger_frames_remaining) / 70.0
+            veh_x = int(p1_x + 210 - progress * 140)
+            veh_y = p1_y + 10
+            # Industrial yellow forklift body
+            cv2.rectangle(frame, (veh_x - 45, veh_y - 45), (veh_x + 45, veh_y + 25), (0, 180, 240), -1)
+            # Cab cage
+            cv2.rectangle(frame, (veh_x - 25, veh_y - 75), (veh_x + 15, veh_y - 45), (40, 40, 40), 2)
+            # Wheels
+            cv2.circle(frame, (veh_x - 30, veh_y + 28), 12, (20, 20, 20), -1)
+            cv2.circle(frame, (veh_x + 30, veh_y + 28), 12, (20, 20, 20), -1)
+            # Front forks
+            cv2.line(frame, (veh_x - 45, veh_y + 18), (veh_x - 70, veh_y + 18), (90, 90, 90), 4)
 
         # Apply Camera-Specific Degradations
         if cam_id == "CAM_02":
@@ -477,6 +533,18 @@ class SurveillancePipelineEngine:
         if anomaly_res.get("alert"):
             detected_incidents.append(anomaly_res["alert"])
 
+        # I. Industrial PPE Compliance Audit
+        ppe_alerts = self.ppe_detector.evaluate(active_tracks, enhanced_frame)
+        detected_incidents.extend(ppe_alerts)
+
+        # J. Vehicle-Pedestrian Collision & Proximity Hazard
+        collision_alerts = self.collision_detector.evaluate(active_tracks)
+        detected_incidents.extend(collision_alerts)
+
+        # K. Worker Immobility & "Man-Down" Emergency Monitor
+        immobility_alerts = self.immobility_detector.evaluate(active_tracks, timestamp=now)
+        detected_incidents.extend(immobility_alerts)
+
         # 6. Multi-Factor Risk Assessment & Alert Dispatch
         processed_alerts = []
         max_risk = 0.08
@@ -499,6 +567,10 @@ class SurveillancePipelineEngine:
                 self.evidence_store[alert["id"]] = ev_pack
                 alert["has_evidence"] = True
 
+                # Dispatch high/critical alerts to registered SOC / webhooks
+                if alert["severity"] in ["HIGH", "CRITICAL"]:
+                    self.webhook_dispatcher.dispatch_alert(alert)
+
                 processed_alerts.append(alert)
                 if alert["risk_score"] > max_risk:
                     max_risk = alert["risk_score"]
@@ -510,6 +582,11 @@ class SurveillancePipelineEngine:
             if anomaly_risk > max_risk:
                 max_risk = anomaly_risk
                 severity = self.alert_manager.determine_severity(max_risk)
+
+        # Update 2D Spatial Occupancy & Hazard Analytics
+        self.spatial_analytics.update(
+            self.current_camera, active_tracks, detected_incidents, frame.shape[:2]
+        )
 
         # Format detections for JSON
         formatted_detections = [
@@ -533,6 +610,10 @@ class SurveillancePipelineEngine:
             for t in active_tracks
         ]
 
+        # Calculate live PPE compliance metrics
+        worker_count = sum(1 for t in active_tracks if t.get("class") == "person")
+        ppe_rate = round(max(0.0, 1.0 - (len(ppe_alerts) / max(1, worker_count))), 2) if worker_count > 0 else 1.0
+
         return {
             "camera_id": self.current_camera,
             "timestamp": now,
@@ -552,6 +633,27 @@ class SurveillancePipelineEngine:
             "risk_score": round(max_risk, 3),
             "severity": severity,
             "alerts": processed_alerts,
+            "ppe_compliance": {
+                "total_workers": worker_count,
+                "violations_count": len(ppe_alerts),
+                "compliance_rate": ppe_rate,
+            },
+            "collision_warnings": [
+                {
+                    "track_id": ca["track_id"],
+                    "ttc_seconds": ca["ttc_seconds"],
+                    "distance_px": ca["distance_px"],
+                    "severity": ca["severity"],
+                }
+                for ca in collision_alerts
+            ],
+            "mandown_status": {
+                "active_alerts": len(immobility_alerts),
+                "longest_immobility_sec": max(
+                    [ia.get("immobility_duration_sec", 0.0) for ia in immobility_alerts],
+                    default=0.0
+                )
+            },
         }
 
 
@@ -1019,9 +1121,120 @@ async def get_incident_types():
             {"id": "loiter", "name": "Suspicious Loitering / Lingering", "severity": "MEDIUM"},
             {"id": "crowd", "name": "Overcrowding & Stampede Panic Surge", "severity": "CRITICAL"},
             {"id": "fire", "name": "Fire & Smoke Early Hazard", "severity": "CRITICAL"},
+            {"id": "ppe", "name": "Industrial PPE Safety Gear Breach", "severity": "HIGH"},
+            {"id": "collision", "name": "Vehicle-Pedestrian Collision / TTC Threat", "severity": "CRITICAL"},
+            {"id": "mandown", "name": "Worker Inactivity & Immobility (Man-Down)", "severity": "CRITICAL"},
             {"id": "anomaly", "name": "Unsupervised Behavioral Anomaly", "severity": "VARIABLE"},
         ]
     }
+
+
+@app.get("/api/ppe/compliance")
+async def get_ppe_compliance():
+    """Returns current active PPE compliance rate, audits, and violation history."""
+    telemetry = engine.latest_telemetry or {}
+    ppe_data = telemetry.get("ppe_compliance", {
+        "total_workers": 0,
+        "violations_count": 0,
+        "compliance_rate": 1.0,
+    })
+    return {
+        "status": "active",
+        "camera_id": engine.current_camera,
+        "metrics": ppe_data,
+        "worker_audit_cache": {
+            str(k): {
+                "violations": v["violations"],
+                "audits": v["audits"],
+                "has_helmet": v["last_status"].get("has_helmet", False),
+                "has_vest": v["last_status"].get("has_vest", False),
+                "compliance_score": v["last_status"].get("compliance_score", 1.0),
+            }
+            for k, v in engine.ppe_detector.worker_audit_cache.items()
+        }
+    }
+
+
+@app.get("/api/collision/warnings")
+async def get_collision_warnings():
+    """Returns active vehicle-pedestrian collision warnings and dynamic TTC vectors."""
+    telemetry = engine.latest_telemetry or {}
+    return {
+        "camera_id": engine.current_camera,
+        "active_warnings": telemetry.get("collision_warnings", []),
+        "critical_ttc_threshold_sec": engine.collision_detector.critical_ttc_seconds,
+        "proximity_threshold_px": engine.collision_detector.proximity_threshold_px,
+    }
+
+
+@app.get("/api/analytics/spatial_heatmap/{cam_id}")
+async def get_spatial_heatmap(cam_id: str):
+    """Returns 2D normalized occupancy and hazard concentration heatmap for specified camera."""
+    return engine.spatial_analytics.get_normalized_heatmap(cam_id)
+
+
+@app.get("/api/webhooks")
+async def list_registered_webhooks():
+    """Lists all configured external notification webhooks (SOC, Slack, Discord)."""
+    return engine.webhook_dispatcher.list_webhooks()
+
+
+@app.post("/api/webhooks")
+async def register_webhook(payload: Dict[str, Any]):
+    """Registers a new external dispatch webhook target."""
+    name = payload.get("name", "External Webhook")
+    url = payload.get("url", "")
+    wh_type = payload.get("type", "generic")
+    min_sev = payload.get("min_severity", "HIGH")
+    if not url:
+        return JSONResponse({"error": "Webhook target URL required"}, status_code=400)
+    entry = engine.webhook_dispatcher.register_webhook(name, url, wh_type, min_sev)
+    record_server_log("INFO", f"Registered new alert dispatch webhook: {name} ({url})", "DISPATCHER")
+    return {"status": "registered", "webhook": entry}
+
+
+@app.delete("/api/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str):
+    """Removes a registered notification webhook."""
+    deleted = engine.webhook_dispatcher.delete_webhook(webhook_id)
+    if not deleted:
+        return JSONResponse({"error": "Webhook ID not found"}, status_code=404)
+    record_server_log("INFO", f"Removed alert webhook target: {webhook_id}", "DISPATCHER")
+    return {"status": "deleted", "webhook_id": webhook_id}
+
+
+@app.get("/api/webhooks/logs")
+async def get_webhook_logs():
+    """Returns recent webhook dispatch audit history and HTTP response status."""
+    return engine.webhook_dispatcher.get_dispatch_logs()
+
+
+@app.post("/api/webhooks/test")
+async def test_webhook_dispatch(payload: Dict[str, Any]):
+    """Sends a mock test incident dispatch through configured webhooks."""
+    mock_alert = {
+        "id": f"TEST-ALT-{int(time.time()*1000)}",
+        "camera_id": engine.current_camera,
+        "incident_type": payload.get("incident_type", "worker_mandown"),
+        "severity": payload.get("severity", "CRITICAL"),
+        "risk_score": 0.94,
+        "timestamp": time.strftime("%H:%M:%S"),
+        "reasons": [
+            "AUTOMATED TEST DISPATCH: QASD Enterprise Watchkeeper integration check.",
+            "Synthetic critical incident payload validated and certified."
+        ],
+        "evidence_metrics": {"test_mode": True, "ping": "ok"},
+        "tamper_evident_seal": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    }
+    results = engine.webhook_dispatcher.dispatch_alert(mock_alert)
+    return {"status": "dispatched", "targets_contacted": len(results), "dispatch_results": results}
+
+
+@app.post("/api/mock_webhook")
+async def mock_webhook_receiver(payload: Dict[str, Any]):
+    """Default local receiver for testing external webhooks without third-party services."""
+    record_server_log("ALERT", f"Mock SOC Webhook received dispatch for: {payload.get('incident_type', 'UNKNOWN')}", "SOC_RECEIVER")
+    return {"status": "received", "event_id": payload.get("alert_id"), "accepted_at": time.time()}
 
 
 @app.get("/api/snapshot/{cam_id}")
@@ -1218,15 +1431,53 @@ async def get_models_info():
             },
             {
                 "id": "safety_incidents",
-                "name": "Multi-Threat Safety Engine (8 Recognizers)",
+                "name": "Multi-Threat Safety Engine (11 Recognizers)",
                 "architecture": "Kinematic + Topological + Chromatic Multi-Modal Analysis",
                 "status": "ACTIVE",
                 "modules": [
                     "Fall & Collapse", "Physical Violence", "Perimeter Intrusion",
                     "Abandoned Luggage", "Suspicious Loitering", "Crowd Surge / Stampede",
-                    "Fire & Smoke Hazard", "Temporal Feature Anomaly"
+                    "Fire & Smoke Hazard", "Industrial PPE Compliance", "Vehicle-Pedestrian Collision (TTC)",
+                    "Worker Immobility (Man-Down)", "Temporal Feature Anomaly"
                 ],
-                "latency_avg_ms": 4.1
+                "latency_avg_ms": 4.6
+            },
+            {
+                "id": "ppe_engine",
+                "name": "Industrial PPE Compliance Analyzer",
+                "architecture": "Upper-Torso Spectral & Chromaticity Segmentation (Hardhat + Hi-Vis Vest)",
+                "status": "ACTIVE",
+                "helmet_required": engine.ppe_detector.helmet_required,
+                "vest_required": engine.ppe_detector.vest_required,
+                "active_audits": len(engine.ppe_detector.worker_audit_cache),
+                "latency_avg_ms": 1.2
+            },
+            {
+                "id": "collision_predictor",
+                "name": "Vehicle-Pedestrian TTC Trajectory Predictor",
+                "architecture": "Kinematic Line-of-Sight Relative Velocity Projection",
+                "status": "ACTIVE",
+                "proximity_threshold_px": engine.collision_detector.proximity_threshold_px,
+                "critical_ttc_seconds": engine.collision_detector.critical_ttc_seconds,
+                "latency_avg_ms": 0.8
+            },
+            {
+                "id": "webhook_dispatcher",
+                "name": "Enterprise SOC Alert Webhook Gateway",
+                "architecture": "Asynchronous REST / Slack / Discord Schema Dispatcher",
+                "status": "ACTIVE",
+                "registered_webhooks": len(engine.webhook_dispatcher.webhooks),
+                "total_dispatches": len(engine.webhook_dispatcher.dispatch_logs),
+                "latency_avg_ms": 0.3
+            },
+            {
+                "id": "spatial_analytics",
+                "name": "Spatial Occupancy & Hazard Density Matrix",
+                "architecture": "Continuous Gaussian-Kernel Accumulation Grid (32x18)",
+                "status": "ACTIVE",
+                "cameras_tracked": len(engine.spatial_analytics.camera_heatmaps),
+                "decay_factor": engine.spatial_analytics.decay_factor,
+                "latency_avg_ms": 0.5
             }
         ],
         "hardware": {

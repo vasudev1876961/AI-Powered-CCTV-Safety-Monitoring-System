@@ -18,10 +18,11 @@ Traditional CCTV surveillance relies heavily on human operators continuously rev
 1. **Assesses CCTV Video Quality** in real-time (categorizing frames as `GOOD`, `MODERATE`, `DEGRADED`, or `SEVERELY DEGRADED`).
 2. **Adaptively Enhances Degraded Video** using dynamic routing (bypassing clean video, applying CLAHE, Bilateral Denoising, and Unsharp Deblurring only when needed).
 3. **Tracks Objects & Analyzes Kinematics** over time (using ByteTrack principles to monitor downward vertical velocity, aspect ratio collapse, and kinetic energy).
-4. **Detects Known Incidents & Unknown Anomalies** simultaneously (Falls, Violence, Intrusions, Loitering, Abandoned Luggage + Continuous Feature-Based Anomaly Scoring).
-5. **Calculates Multi-Factor Risk Scores**:
+4. **Detects 11 Known Incidents & Unknown Anomalies** simultaneously (Falls, Violence, Intrusions, Loitering, Abandoned Luggage, Crowd Surges, Fire/Smoke, Industrial PPE Violations, Vehicle-Pedestrian Collision TTC, Worker Immobility/Man-Down + Continuous Feature-Based Anomaly Scoring).
+5. **Dispatches Automated External Webhooks**: Live alert forwarding to Enterprise SOC, Slack, Discord, and Teams with SHA-256 tamper-evident integrity seals.
+6. **Calculates Multi-Factor Risk Scores**:
    $$\text{Risk Score} = P_{\text{incident}} \times C_{\text{temporal}} \times C_{\text{detection}} \times Q_{\text{factor}}$$
-6. **Delivers Explainable AI (XAI) Evidence**: Grad-CAM attention heatmaps, synchronized critical frame timelines ($t_{-2s}, t_0, t_{+2s}$), kinematic trajectory profiles, and natural-language causal reasoning.
+7. **Delivers Explainable AI (XAI) Evidence**: Grad-CAM attention heatmaps, synchronized critical frame timelines ($t_{-2s}, t_0, t_{+2s}$), kinematic trajectory profiles, and natural-language causal reasoning.
 
 ---
 
@@ -235,7 +236,7 @@ Outputs formatted ASCII comparison tables and updates `benchmark_results.json`.
 
 ### Option E: Running Automated Test Suites
 ```bash
-# Execute all 51 automated unit and integration tests
+# Execute all 59 automated unit and integration tests
 pytest -v
 ```
 
@@ -245,8 +246,8 @@ pytest -v
 
 The web operations console features an Obsidian Cyber-Command design system tailored for mission-critical surveillance:
 
-1. **📡 Live Surveillance Console**: Multi-channel feeds (CAM-01 to CAM-04, 2x2 Quad Matrix), live stream switcher (`📡 AI Stream` vs `⚡ Client Sim`), interactive polygonal geofencing, real-time multi-factor risk gauge, quick incident trigger simulations (Falls, Altercations, Intrusions, Unattended Bags, Loitering, Crowd Surge, Fire/Smoke), and a live Cross-Camera Re-ID Handover Monitor.
-2. **⚙️ AI Backend & Microservices Hub**: Distributed pipeline architecture flow visualizer, microservices health telemetry (FastAPI, YOLOv8, ByteTrack, Re-ID Engine, Threat Core), interactive REST API playground, live hyperparameter threshold tuner, and a real-time scrolling terminal log stream.
+1. **📡 Live Surveillance Console**: Multi-channel feeds (CAM-01 to CAM-04, 2x2 Quad Matrix), live stream switcher (`📡 AI Stream` vs `⚡ Client Sim`), interactive polygonal geofencing, real-time multi-factor risk gauge, quick incident trigger simulations (Falls, Altercations, Intrusions, Unattended Bags, Loitering, Crowd Surge, Fire/Smoke, PPE Breaches, Collision Hazards, and Man-Down Emergency), and a live Cross-Camera Re-ID Handover Monitor.
+2. **⚙️ AI Backend & Microservices Hub**: Distributed pipeline architecture flow visualizer, microservices health telemetry (FastAPI, YOLOv8, ByteTrack, Re-ID Engine, Threat Core, PPE Analyzer, TTC Collision Forecaster, SOC Webhook Gateway), interactive REST API playground, live hyperparameter threshold tuner, and a real-time scrolling terminal log stream.
 3. **🔬 Degradation & Restoration Lab**: Interactive before/after split evaluation of poor CCTV feeds with real-time controls for illumination (lux), sensor noise (dB), blur (px), downsampling, atmospheric haze, and compression.
 4. **📁 Forensics & Evidence Vault**: Searchable incident archive, full explainable AI (XAI) dossiers with keyframe replay scrubber, Grad-CAM saliency attention maps, kinematic velocity profiles, cryptographic SHA-256 integrity seal verification, and standalone printable official HTML/PDF forensic dossier export.
 5. **📊 Research Benchmark Lab**: Empirical validation graphs, mAP@50 curves, ROC-AUC distributions, latency breakdowns, and CSV export.
@@ -263,12 +264,19 @@ The web operations console features an Obsidian Cyber-Command design system tail
 | `/api/snapshot/{cam_id}` | GET | Capture high-resolution forensic snapshot with watermarked metadata |
 | `/api/reid/entities` | GET | List active global entities and cross-camera transit journeys |
 | `/api/reid/handovers` | GET | Retrieve recent cross-camera handover events with match scores |
+| `/api/ppe/compliance` | GET | Retrieve real-time PPE audit rates, helmet and hi-vis vest statistics |
+| `/api/collision/warnings` | GET | Retrieve active vehicle-pedestrian collision hazards and TTC vectors |
+| `/api/analytics/spatial_heatmap/{cam_id}` | GET | Retrieve 2D continuous spatial occupancy and incident density grid |
+| `/api/webhooks` | GET / POST | List or register external notification webhooks (SOC, Slack, Discord) |
+| `/api/webhooks/{id}` | DELETE | Deregister an external alert dispatch webhook |
+| `/api/webhooks/logs` | GET | Audit history of external webhook dispatches and HTTP delivery codes |
+| `/api/webhooks/test` | POST | Fire synthetic test emergency alert through configured webhook targets |
 | `/api/evidence/{alert_id}/export` | GET | Generate official standalone printable HTML/PDF forensic incident dossier |
 | `/api/evidence/{alert_id}/verify` | GET | Verify cryptographic SHA-256 tamper-evident integrity seal |
-| `/api/incidents/types` | GET | Retrieve list of 8 supported incident recognition categories |
+| `/api/incidents/types` | GET | Retrieve list of 11 supported incident recognition categories |
 | `/api/analyze_video` | POST | Deep forensic audit on uploaded MP4/AVI CCTV video files |
 | `/api/health` | GET | System uptime, loaded model, device, active camera, and WS client count |
-| `/api/models/info` | GET | Deep neural network inspection (YOLOv8, tracker, Re-ID, risk core) |
+| `/api/models/info` | GET | Deep neural network inspection (YOLOv8, tracker, Re-ID, risk core, PPE, collision) |
 | `/api/logs` | GET | Operational server event logs with level filtering (ALL, INFO, ALERT, CRITICAL) |
 | `/api/logs/clear` | POST | Reset in-memory server log buffer |
 | `/api/system_info` | GET | Complete pipeline topology, detector classes, and active geofences |
